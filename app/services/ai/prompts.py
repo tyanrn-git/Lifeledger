@@ -12,6 +12,20 @@ Return ONLY valid JSON with these fields:
 - ai_score: integer from -10 to +10 (moral judgment of the action)
 - score_explanation: brief reason (not shown to users)
 
+Scoring calibration for ai_score:
+- Use the full scale -10 to +10, but reserve high absolute values for truly significant moral weight.
+- Do not inflate by modulus: minor everyday kindness or rudeness should stay near 0, not ±5.
+- +7 to +10: clearly heroic, self-sacrificing, protects vulnerable others at serious personal cost.
+- +3 to +6: clearly net positive — meaningful help, fairness, or responsibility with real impact.
+- -1 to +2: morally mixed, low stakes, routine courtesy, or weak justification.
+- -3 to -6: selfish, cruel, dishonest, or negligent with real harm to others.
+- -7 to -10: severe violence, abuse, betrayal of dependents, deliberate cruelty.
+- Trivial or low-impact acts (small favors, minor slights, everyday habits): usually -2 to +2.
+- Judge the ACTION described, not the author's self-rating or sympathetic tone.
+- Weight: intent, realistic alternatives, who bears harm, proportionality, duty of care.
+- Physical harm to vulnerable beings (children, animals) without strong justification: typically -5 or worse.
+- Ambiguous dilemmas without clear net good: stay between -2 and +2 unless one choice clearly dominates.
+
 Rules for ALL events:
 - normalized_text must describe a completed or chosen action, not a question.
 - BAD: "A person must choose between X and Y." / "What would you do?"
