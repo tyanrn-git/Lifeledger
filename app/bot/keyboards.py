@@ -1,7 +1,14 @@
 from collections.abc import Sequence
 from uuid import UUID
 
-from aiogram.types import InlineKeyboardButton, InlineKeyboardMarkup
+from aiogram.types import (
+    InlineKeyboardButton,
+    InlineKeyboardMarkup,
+    KeyboardButton,
+    KeyboardButtonRequestUsers,
+    ReplyKeyboardMarkup,
+    ReplyKeyboardRemove,
+)
 
 from app.schemas.events import Event
 
@@ -219,13 +226,46 @@ def language_picker_keyboard(
     return InlineKeyboardMarkup(inline_keyboard=rows)
 
 
+FRIENDS_PICK_REQUEST_ID = 1
+
+
+def friends_pick_user_keyboard(lang: str) -> ReplyKeyboardMarkup:
+    pick_label = "👤 Выбрать друга" if lang == "ru" else "👤 Select a friend"
+    cancel_label = "✖ Отмена" if lang == "ru" else "✖ Cancel"
+    return ReplyKeyboardMarkup(
+        keyboard=[
+            [
+                KeyboardButton(
+                    text=pick_label,
+                    request_users=KeyboardButtonRequestUsers(
+                        request_id=FRIENDS_PICK_REQUEST_ID,
+                        user_is_bot=False,
+                        max_quantity=1,
+                        request_name=True,
+                        request_username=True,
+                    ),
+                )
+            ],
+            [KeyboardButton(text=cancel_label)],
+        ],
+        resize_keyboard=True,
+        one_time_keyboard=True,
+    )
+
+
+def friends_pick_cancel_keyboard() -> ReplyKeyboardRemove:
+    return ReplyKeyboardRemove()
+
+
 def friends_main_keyboard(lang: str, pending_count: int) -> InlineKeyboardMarkup:
     if lang == "ru":
+        pick_label = "Пригласить друга"
         invite_label = "Получить ссылку приглашения"
         incoming_label = "Входящие приглашения"
         if pending_count:
             incoming_label = f"Входящие приглашения ({pending_count})"
     else:
+        pick_label = "Invite a friend"
         invite_label = "Get invite link"
         incoming_label = "Incoming invitations"
         if pending_count:
@@ -233,6 +273,7 @@ def friends_main_keyboard(lang: str, pending_count: int) -> InlineKeyboardMarkup
 
     return InlineKeyboardMarkup(
         inline_keyboard=[
+            [InlineKeyboardButton(text=pick_label, callback_data="friends:pick")],
             [InlineKeyboardButton(text=invite_label, callback_data="friends:invite")],
             [InlineKeyboardButton(text=incoming_label, callback_data="friends:incoming")],
         ]

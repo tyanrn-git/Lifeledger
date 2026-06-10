@@ -222,6 +222,38 @@ MESSAGES: dict[str, dict[str, str]] = {
         "ru": "Приглашение {n}",
         "en": "Invitation {n}",
     },
+    "friends_pick_prompt": {
+        "ru": "Нажмите кнопку ниже и выберите друга в Telegram.",
+        "en": "Tap the button below and select a friend in Telegram.",
+    },
+    "friends_pick_sent": {
+        "ru": "Приглашение отправлено: {name}",
+        "en": "Invitation sent to {name}",
+    },
+    "friends_pick_accepted": {
+        "ru": "Вы уже друзья с {name}.",
+        "en": "You are already friends with {name}.",
+    },
+    "friends_pick_failed": {
+        "ru": (
+            "Не удалось отправить приглашение {name}.\n\n"
+            "Возможно, этот человек ещё не открывал бота. "
+            "Используйте «Получить ссылку приглашения»."
+        ),
+        "en": (
+            "Could not send an invitation to {name}.\n\n"
+            "They may not have opened the bot yet. "
+            "Use “Get invite link” instead."
+        ),
+    },
+    "friends_pick_cancelled": {
+        "ru": "Приглашение отменено.",
+        "en": "Invitation cancelled.",
+    },
+    "friends_invite_incoming": {
+        "ru": "Вас приглашают стать друзьями в LifeLedger.",
+        "en": "You are invited to become friends on LifeLedger.",
+    },
     "stats_author_title": {
         "ru": "Мои события",
         "en": "My events",

@@ -28,6 +28,58 @@ class UsersRepository:
     def __init__(self, pool: asyncpg.Pool) -> None:
         self._pool = pool
 
+    async def get_or_create_from_telegram_profile(
+        self,
+        *,
+        telegram_id: int,
+        username: str | None,
+        first_name: str | None,
+        last_name: str | None,
+        default_language: str = "en",
+    ) -> tuple[User, bool]:
+        existing = await self.get_by_telegram_id(telegram_id)
+        now = datetime.now(timezone.utc)
+        first = first_name or "User"
+        language = normalize_content_language(default_language, default=lang_prefix(default_language))
+
+        if existing:
+            row = await self._pool.fetchrow(
+                """
+                update users
+                set username = $2,
+                    first_name = $3,
+                    last_name = $4,
+                    last_seen_at = $5,
+                    updated_at = $5
+                where telegram_id = $1
+                returning *
+                """,
+                telegram_id,
+                username,
+                first,
+                last_name,
+                now,
+            )
+            return _row_to_user(row), False
+
+        row = await self._pool.fetchrow(
+            """
+            insert into users (
+              telegram_id, username, first_name, last_name,
+              language_code, last_seen_at
+            )
+            values ($1, $2, $3, $4, $5, $6)
+            returning *
+            """,
+            telegram_id,
+            username,
+            first,
+            last_name,
+            language,
+            now,
+        )
+        return _row_to_user(row), True
+
     async def get_by_telegram_id(self, telegram_id: int) -> User | None:
         row = await self._pool.fetchrow(
             "select * from users where telegram_id = $1",
