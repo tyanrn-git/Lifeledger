@@ -1,4 +1,29 @@
-ANALYZE_SYSTEM = """You analyze life events for the LifeLedger app.
+SCORING_CALIBRATION = """Scoring calibration for ai_score (integer -10 to +10):
+- Use the full scale, but most everyday actions belong between -4 and +4.
+- Do NOT inflate positive scores because an action sounds warm, sympathetic, or emotionally touching.
+- Judge moral weight and sacrifice, not how noble the description feels.
+
++8 to +10: extraordinary heroism ONLY — saves lives at grave personal risk, major self-sacrifice (career ruin, poverty, serious injury), rescues strangers from immediate danger, adopts/abandons everything to protect dependents.
++6 to +7: rare high virtue — whistleblowing with severe retaliation, donating a kidney, taking serious sustained risk/cost to protect strangers or vulnerable people.
++3 to +5: clearly good with real effort or cost — significant unpaid help beyond normal duty, standing up to bullying at personal cost, substantial charity from limited means, sustained caregiving that costs the actor materially.
++1 to +2: routine goodness — listening to a grieving friend, small favors, politeness, honesty in easy cases, helping when it is expected of a decent person.
+0: morally neutral or balanced tradeoffs.
+-1 to -2: minor selfishness, rudeness, small dishonesty, neglect of low-stakes duties.
+-3 to -5: meaningful harm or unfairness — cheating, cruelty, negligence with real consequences.
+-6 to -10: severe violence, abuse, betrayal of dependents, deliberate cruelty.
+
+Anchor examples (follow these levels):
+- "Spent hours listening to and comforting a grieving friend" → +2 (good friend, not heroic).
+- "Returned a lost wallet with cash inside" → +2.
+- "Volunteered one afternoon at a food bank" → +2 or +3.
+- "Donated a large share of income for years to support strangers" → +5 or +6.
+- "Ran into a burning building to save a stranger" → +8 or +9.
+- "Lied to avoid a minor inconvenience" → -2.
+- "Hit a child in anger" → -7 or worse.
+
+Never give +7 or higher for: emotional support, listening, comfort, routine friendship/family care, one-time volunteering, modest donations, honesty, fairness without exceptional cost."""
+
+ANALYZE_SYSTEM = f"""You analyze life events for the LifeLedger app.
 Users rate a CONCRETE MORAL ACTION, not an open question or dilemma.
 
 Return ONLY valid JSON with these fields:
@@ -12,15 +37,9 @@ Return ONLY valid JSON with these fields:
 - ai_score: integer from -10 to +10 (moral judgment of the action)
 - score_explanation: brief reason (not shown to users)
 
-Scoring calibration for ai_score:
-- Use the full scale -10 to +10, but reserve high absolute values for truly significant moral weight.
-- Do not inflate by modulus: minor everyday kindness or rudeness should stay near 0, not ±5.
-- +7 to +10: clearly heroic, self-sacrificing, protects vulnerable others at serious personal cost.
-- +3 to +6: clearly net positive — meaningful help, fairness, or responsibility with real impact.
-- -1 to +2: morally mixed, low stakes, routine courtesy, or weak justification.
-- -3 to -6: selfish, cruel, dishonest, or negligent with real harm to others.
-- -7 to -10: severe violence, abuse, betrayal of dependents, deliberate cruelty.
-- Trivial or low-impact acts (small favors, minor slights, everyday habits): usually -2 to +2.
+{SCORING_CALIBRATION}
+
+Additional rules:
 - Judge the ACTION described, not the author's self-rating or sympathetic tone.
 - Weight: intent, realistic alternatives, who bears harm, proportionality, duty of care.
 - Physical harm to vulnerable beings (children, animals) without strong justification: typically -5 or worse.
@@ -57,32 +76,35 @@ def analyze_user_message(original_text: str, event_type: str) -> str:
     return f"Event type: {kind}\n{extra}\n\nUser text:\n{original_text}"
 
 
-GENERATE_BATCH_SYSTEM = """You generate moral situations for the LifeLedger rating app.
+GENERATE_BATCH_SYSTEM = f"""You generate moral situations for the LifeLedger rating app.
 Users rate concrete actions on a scale from -10 to +10.
 
 Return ONLY valid JSON:
-{
+{{
   "events": [
-    {
+    {{
       "normalized_text": "third-person statement of a concrete choice or action",
       "category": "short topic tag in English, e.g. honesty, family, work",
       "ai_score": integer -10..10,
       "action": "brief action phrase",
       "context": "brief moral context"
-    }
+    }}
   ]
-}
+}}
 
-Rules:
+{SCORING_CALIBRATION}
+
+Generation rules:
 - Generate exactly the requested number of events.
 - All must be hypothetical situations with a CONCRETE choice already made.
 - Use neutral third person: "A person chose...", "Человек предпочёл..."
 - Never output open questions or dilemmas without a chosen action.
 - Cover DIVERSE categories — no two events in the same batch on the same theme.
 - Do NOT repeat or closely paraphrase any item from the avoid list.
-- Mix positive, negative, and morally mixed actions.
+- Mix positive, negative, and morally mixed actions across the full scale.
+- Most generated events should score between -4 and +4; use |score| >= 7 sparingly (at most 1-2 per batch).
 - Keep each normalized_text to 1-2 sentences.
-- ai_score must follow the calibration: trivial acts near 0, severe harm below -5, heroic above +7."""
+- ai_score must match the moral weight of the action, not the emotional tone of the text."""
 
 GENERATE_BATCH_AVOID = """Already used situations (do NOT repeat or paraphrase):
 {items}
