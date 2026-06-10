@@ -1,4 +1,7 @@
+from dataclasses import dataclass
 from decimal import Decimal
+
+SCORING_CALIBRATION_VERSION = 2
 
 # Порог количества оценок → (вес AI, вес пользователей)
 _WEIGHT_THRESHOLDS: list[tuple[int, float, float]] = [
@@ -19,17 +22,56 @@ def get_ai_user_weights(ratings_count: int) -> tuple[float, float]:
     return ai_weight, user_weight
 
 
+@dataclass(frozen=True)
+class CommunityScoreBreakdown:
+    ai_score: float | None
+    community_user_score: float | None
+    community_ratings_count: int
+    ai_weight: float
+    user_weight: float
+    final_community_score: float | None
+
+    def is_ai_only(self) -> bool:
+        return self.community_ratings_count == 0 or self.community_user_score is None
+
+
+def build_community_score_breakdown(
+    ai_score: float | Decimal | None,
+    community_user_score: float | Decimal | None,
+    community_ratings_count: int,
+) -> CommunityScoreBreakdown:
+    ai_f = float(ai_score) if ai_score is not None else None
+    community_f = (
+        float(community_user_score) if community_user_score is not None else None
+    )
+    ai_weight, user_weight = get_ai_user_weights(community_ratings_count)
+
+    if ai_f is None:
+        final = community_f
+    elif community_ratings_count == 0 or community_f is None:
+        final = ai_f
+        ai_weight, user_weight = 1.0, 0.0
+    else:
+        final = ai_f * ai_weight + community_f * user_weight
+
+    return CommunityScoreBreakdown(
+        ai_score=ai_f,
+        community_user_score=community_f,
+        community_ratings_count=community_ratings_count,
+        ai_weight=ai_weight,
+        user_weight=user_weight,
+        final_community_score=final,
+    )
+
+
 def calculate_final_community_score(
     ai_score: float | Decimal | None,
     community_user_score: float | Decimal | None,
     ratings_count: int,
 ) -> float | None:
-    if ai_score is None:
-        return float(community_user_score) if community_user_score is not None else None
-    if ratings_count == 0 or community_user_score is None:
-        return float(ai_score)
-    ai_weight, user_weight = get_ai_user_weights(ratings_count)
-    return float(ai_score) * ai_weight + float(community_user_score) * user_weight
+    return build_community_score_breakdown(
+        ai_score, community_user_score, ratings_count
+    ).final_community_score
 
 
 def format_score(value: int | float | Decimal | None) -> str:

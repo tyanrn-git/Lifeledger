@@ -23,3 +23,7 @@ class GeneratedEventDraft(BaseModel):
 
 class GeneratedEventsBatch(BaseModel):
     events: list[GeneratedEventDraft]
+
+
+class EventRescore(BaseModel):
+    ai_score: int = Field(ge=-10, le=10)

@@ -7,7 +7,7 @@ from app.db.repositories.friendships import FriendshipsRepository
 from app.db.repositories.impressions import ImpressionsRepository
 from app.db.repositories.ratings import RatingsRepository
 from app.schemas.events import EventForRating
-from app.utils.scoring import calculate_final_community_score
+from app.utils.scoring import build_community_score_breakdown
 
 
 class RatingService:
@@ -99,7 +99,8 @@ class RatingService:
               count(*)::int as total_count,
               count(*) filter (where rating_scope = 'community')::int as community_count,
               count(*) filter (where rating_scope = 'friend')::int as friends_count,
-              avg(score)::numeric(5,2) as community_user_score,
+              avg(score) filter (where rating_scope = 'community')::numeric(5,2)
+                as community_user_score,
               avg(score) filter (where rating_scope = 'friend')::numeric(5,2) as friends_score
             from ratings
             where event_id = $1
@@ -110,14 +111,16 @@ class RatingService:
         ai_score = await conn.fetchval("select ai_score from events where id = $1", event_id)
         ai_score_f = float(ai_score) if ai_score is not None else None
 
-        total_count = row["total_count"]
-        community_user_score = float(row["community_user_score"]) if total_count else None
+        community_count = row["community_count"]
+        community_user_score = (
+            float(row["community_user_score"]) if community_count else None
+        )
         friends_score = float(row["friends_score"]) if row["friends_count"] else None
 
-        final_score = calculate_final_community_score(
+        breakdown = build_community_score_breakdown(
             ai_score_f,
             community_user_score,
-            total_count,
+            community_count,
         )
 
         await conn.execute(
@@ -128,13 +131,17 @@ class RatingService:
                 final_community_score = $4,
                 community_ratings_count = $5,
                 friends_ratings_count = $6,
+                community_ai_weight = $7,
+                community_user_weight = $8,
                 updated_at = now()
             where id = $1
             """,
             event_id,
-            community_user_score,
+            breakdown.community_user_score,
             friends_score,
-            final_score,
-            row["community_count"],
+            breakdown.final_community_score,
+            community_count,
             row["friends_count"],
+            breakdown.ai_weight,
+            breakdown.user_weight,
         )

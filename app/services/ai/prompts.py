@@ -136,6 +136,22 @@ Generate {count} new diverse moral situations.
 Use strict scoring: most ai_score values must be -2..+2."""
 
 
+RESCORE_SYSTEM = f"""You assign ai_score to a life event for the LifeLedger app.
+Return ONLY valid JSON: {{"ai_score": integer -10..10}}
+
+{SCORING_CALIBRATION}
+
+The text describes a concrete moral action. Score the action only."""
+
+
+def rescore_user_message(normalized_text: str, event_type: str) -> str:
+    return (
+        f"Event type: {event_type}\n"
+        "Apply strict scoring: most actions are 0 to +2. Do not inflate.\n\n"
+        f"Event text:\n{normalized_text}"
+    )
+
+
 def generate_batch_user_message(avoid_texts: list[str], count: int) -> str:
     if avoid_texts:
         items = "\n".join(f"- {t}" for t in avoid_texts[:40])

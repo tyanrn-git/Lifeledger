@@ -7,6 +7,7 @@ from app.schemas.ai import GeneratedEventDraft
 from app.schemas.events import Event, EventForRating
 from app.schemas.notifications import EventNotificationMeta
 from app.utils.content_hash import content_hash as make_content_hash
+from app.utils.scoring import SCORING_CALIBRATION_VERSION
 
 
 def _row_to_event(row: asyncpg.Record) -> Event:
@@ -48,11 +49,13 @@ class EventsRepository:
               author_user_id, event_type, original_text, original_language,
               normalized_text, self_score, ai_score, final_community_score,
               event_time, action_text, context_text, category,
-              source, content_hash
+              source, content_hash,
+              community_ai_weight, community_user_weight, scoring_calibration_version
             )
             values (
               $1, $2::event_type, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12,
-              'user'::event_source, $13
+              'user'::event_source, $13,
+              1.0, 0.0, $14
             )
             returning *
             """,
@@ -69,6 +72,7 @@ class EventsRepository:
             context_text,
             category,
             text_hash,
+            SCORING_CALIBRATION_VERSION,
         )
         return _row_to_event(row)
 
@@ -104,12 +108,14 @@ class EventsRepository:
                   author_user_id, event_type, original_text, original_language,
                   normalized_text, self_score, ai_score, final_community_score,
                   action_text, context_text, category,
-                  source, generation_batch_id, content_hash
+                  source, generation_batch_id, content_hash,
+                  community_ai_weight, community_user_weight, scoring_calibration_version
                 )
                 values (
                   null, 'hypothetical'::event_type, $1, 'en', $1, $2, $3, $3,
                   $4, $5, $6,
-                  'ai_generated'::event_source, $7, $8
+                  'ai_generated'::event_source, $7, $8,
+                  1.0, 0.0, $9
                 )
                 returning id
                 """,
@@ -121,6 +127,7 @@ class EventsRepository:
                 draft.category,
                 generation_batch_id,
                 text_hash,
+                SCORING_CALIBRATION_VERSION,
             )
             if row:
                 created.append(row["id"])

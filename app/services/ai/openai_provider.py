@@ -3,14 +3,16 @@ import logging
 
 from openai import AsyncOpenAI
 
-from app.schemas.ai import EventAnalysis, GeneratedEventsBatch
+from app.schemas.ai import EventAnalysis, EventRescore, GeneratedEventsBatch
 from app.services.ai.base import AIProvider
 from app.services.ai.prompts import (
     ANALYZE_SYSTEM,
     GENERATE_BATCH_SYSTEM,
+    RESCORE_SYSTEM,
     TRANSLATE_SYSTEM,
     analyze_user_message,
     generate_batch_user_message,
+    rescore_user_message,
     translate_user_message,
 )
 
@@ -83,3 +85,24 @@ class OpenAIProvider(AIProvider):
         raw = response.choices[0].message.content or '{"events":[]}'
         data = json.loads(raw)
         return GeneratedEventsBatch.model_validate(data)
+
+    async def rescore_event(
+        self,
+        normalized_text: str,
+        event_type: str,
+    ) -> EventRescore:
+        response = await self._client.chat.completions.create(
+            model=self._model,
+            response_format={"type": "json_object"},
+            messages=[
+                {"role": "system", "content": RESCORE_SYSTEM},
+                {
+                    "role": "user",
+                    "content": rescore_user_message(normalized_text, event_type),
+                },
+            ],
+            temperature=0.1,
+        )
+        raw = response.choices[0].message.content or '{"ai_score":0}'
+        data = json.loads(raw)
+        return EventRescore.model_validate(data)

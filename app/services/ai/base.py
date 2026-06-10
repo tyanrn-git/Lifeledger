@@ -1,6 +1,6 @@
 from abc import ABC, abstractmethod
 
-from app.schemas.ai import EventAnalysis, GeneratedEventsBatch
+from app.schemas.ai import EventAnalysis, EventRescore, GeneratedEventsBatch
 
 
 class AIProvider(ABC):
@@ -28,4 +28,12 @@ class AIProvider(ABC):
         avoid_texts: list[str],
         count: int,
     ) -> GeneratedEventsBatch:
+        raise NotImplementedError
+
+    @abstractmethod
+    async def rescore_event(
+        self,
+        normalized_text: str,
+        event_type: str,
+    ) -> EventRescore:
         raise NotImplementedError

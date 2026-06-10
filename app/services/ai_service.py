@@ -1,7 +1,7 @@
 import logging
 from datetime import datetime
 
-from app.schemas.ai import EventAnalysis, GeneratedEventsBatch
+from app.schemas.ai import EventAnalysis, EventRescore, GeneratedEventsBatch
 from app.services.ai.base import AIProvider
 
 logger = logging.getLogger(__name__)
@@ -24,6 +24,17 @@ class AIService:
         except Exception:
             logger.exception("AI analysis failed, using fallback")
             return self._fallback_analysis(original_text, user_language)
+
+    async def rescore_event(
+        self,
+        normalized_text: str,
+        event_type: str,
+    ) -> EventRescore:
+        try:
+            return await self._provider.rescore_event(normalized_text, event_type)
+        except Exception:
+            logger.exception("AI rescore failed for event text")
+            return EventRescore(ai_score=0)
 
     async def generate_event_batch(
         self,

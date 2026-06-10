@@ -27,6 +27,7 @@ from app.services.feed_service import FeedService
 from app.services.friendship_service import FriendshipService
 from app.services.notification_service import NotificationService
 from app.services.rating_service import RatingService
+from app.services.score_recalibration_service import ScoreRecalibrationService
 from app.services.stats_service import StatsService
 from app.services.translation_service import TranslationService
 from app.services.user_service import UserService
@@ -34,7 +35,7 @@ from app.services.user_service import UserService
 logger = logging.getLogger(__name__)
 
 
-def build_services(pool, bot_username: str, bot: Bot):
+def build_services(pool, bot_username: str, bot: Bot, *, ai_service: AIService | None = None):
     users_repo = UsersRepository(pool)
     events_repo = EventsRepository(pool)
     impressions_repo = ImpressionsRepository(pool)
@@ -45,7 +46,8 @@ def build_services(pool, bot_username: str, bot: Bot):
     stats_repo = StatsRepository(pool)
     notifications_repo = NotificationsRepository(pool)
 
-    ai_service = AIService(build_ai_provider())
+    if ai_service is None:
+        ai_service = AIService(build_ai_provider())
     ai_generation_service = AIGenerationService(pool, events_repo, ai_service)
 
     return {
@@ -76,7 +78,12 @@ async def bootstrap() -> tuple[Bot, Dispatcher]:
     me = await bot.get_me()
     bot_username = me.username or "MyLifeledgerbot"
 
-    services = build_services(pool, bot_username, bot)
+    ai_service = AIService(build_ai_provider())
+    recalibration = ScoreRecalibrationService(pool, ai_service)
+    await recalibration.refresh_all_community_scores()
+    asyncio.create_task(recalibration.run_background_rescore())
+
+    services = build_services(pool, bot_username, bot, ai_service=ai_service)
     dp = setup_dispatcher(services)
     return bot, dp
 

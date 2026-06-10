@@ -51,7 +51,8 @@ class RatingsRepository:
               count(*)::int as total_count,
               count(*) filter (where rating_scope = 'community')::int as community_count,
               count(*) filter (where rating_scope = 'friend')::int as friends_count,
-              avg(score)::numeric(5,2) as community_user_score,
+              avg(score) filter (where rating_scope = 'community')::numeric(5,2)
+                as community_user_score,
               avg(score) filter (where rating_scope = 'friend')::numeric(5,2) as friends_score
             from ratings
             where event_id = $1
@@ -59,7 +60,9 @@ class RatingsRepository:
             event_id,
         )
         friends_score = row["friends_score"] if row["friends_count"] else None
-        community_user_score = row["community_user_score"] if row["total_count"] else None
+        community_user_score = (
+            row["community_user_score"] if row["community_count"] else None
+        )
         return EventRatingAggregates(
             total_count=row["total_count"],
             community_count=row["community_count"],
