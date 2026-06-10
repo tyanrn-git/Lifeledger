@@ -2,20 +2,15 @@ import logging
 from uuid import UUID
 
 from aiogram import F, Router
-from aiogram.exceptions import TelegramBadRequest, TelegramForbiddenError
 from aiogram.filters import Command
-from aiogram.types import CallbackQuery, Message
+from aiogram.types import CallbackQuery, InlineKeyboardMarkup, Message
 
 from app.bot.keyboards import (
-    FRIENDS_PICK_REQUEST_ID,
     friends_incoming_keyboard,
     friends_main_keyboard,
-    friends_pick_cancel_keyboard,
-    friends_pick_user_keyboard,
     invite_confirm_keyboard,
 )
-from app.config import settings
-from app.i18n import resolve_lang, t
+from app.i18n import t
 from app.schemas.users import User
 from app.services.friendship_service import (
     AlreadyFriendsError,
@@ -26,7 +21,19 @@ from app.services.friendship_service import (
 logger = logging.getLogger(__name__)
 router = Router()
 
-_PICK_CANCEL_TEXTS = {"✖ Отмена", "✖ Cancel"}
+
+def _friends_keyboard(
+    lang: str,
+    pending_count: int,
+    friendship_service: FriendshipService,
+    user_id: UUID,
+) -> InlineKeyboardMarkup:
+    invite_link = friendship_service.build_invite_link(user_id)
+    share_url = friendship_service.build_invite_share_url(
+        invite_link,
+        t("friends_share_text", lang),
+    )
+    return friends_main_keyboard(lang, pending_count, share_url)
 
 
 async def send_friends_screen(
@@ -39,7 +46,7 @@ async def send_friends_screen(
     pending = await friendship_service.list_pending_incoming(user_id)
     await message.answer(
         t("friends_screen", lang, count=count),
-        reply_markup=friends_main_keyboard(lang, len(pending)),
+        reply_markup=_friends_keyboard(lang, len(pending), friendship_service, user_id),
     )
 
 
@@ -78,111 +85,9 @@ async def friends_main(
     pending = await friendship_service.list_pending_incoming(user_id)
     await callback.message.edit_text(
         t("friends_screen", lang, count=count),
-        reply_markup=friends_main_keyboard(lang, len(pending)),
+        reply_markup=_friends_keyboard(lang, len(pending), friendship_service, user_id),
     )
     await callback.answer()
-
-
-@router.callback_query(F.data == "friends:pick")
-async def friends_pick(
-    callback: CallbackQuery,
-    lang: str,
-) -> None:
-    if not callback.message:
-        await callback.answer()
-        return
-    await callback.message.answer(
-        t("friends_pick_prompt", lang),
-        reply_markup=friends_pick_user_keyboard(lang),
-    )
-    await callback.answer()
-
-
-@router.message(F.text.in_(_PICK_CANCEL_TEXTS))
-async def friends_pick_cancel(message: Message, lang: str) -> None:
-    await message.answer(
-        t("friends_pick_cancelled", lang),
-        reply_markup=friends_pick_cancel_keyboard(),
-    )
-
-
-@router.message(F.users_shared)
-async def friends_user_shared(
-    message: Message,
-    user_id: UUID,
-    lang: str,
-    friendship_service: FriendshipService,
-) -> None:
-    shared = message.users_shared
-    if not shared or shared.request_id != FRIENDS_PICK_REQUEST_ID or not shared.users:
-        return
-
-    picked = shared.users[0]
-    name = picked.first_name or picked.username or "User"
-
-    if message.from_user and picked.user_id == message.from_user.id:
-        await message.answer(
-            t("friends_self_invite", lang),
-            reply_markup=friends_pick_cancel_keyboard(),
-        )
-        return
-
-    try:
-        result = await friendship_service.create_invite_from_picker(
-            user_id,
-            telegram_id=picked.user_id,
-            username=picked.username,
-            first_name=picked.first_name,
-            last_name=picked.last_name,
-            default_language=settings.default_language,
-        )
-    except SelfInviteError:
-        await message.answer(
-            t("friends_self_invite", lang),
-            reply_markup=friends_pick_cancel_keyboard(),
-        )
-        return
-    except AlreadyFriendsError:
-        await message.answer(
-            t("friends_pick_accepted", lang, name=name),
-            reply_markup=friends_pick_cancel_keyboard(),
-        )
-        return
-    except Exception:
-        logger.exception("friends picker failed inviter=%s picked=%s", user_id, picked.user_id)
-        await message.answer(t("error_generic", lang), reply_markup=friends_pick_cancel_keyboard())
-        return
-    invitee_lang = resolve_lang(result.invitee.language_code)
-
-    if result.friendship.status == "accepted":
-        await message.answer(
-            t("friends_pick_accepted", lang, name=name),
-            reply_markup=friends_pick_cancel_keyboard(),
-        )
-        return
-
-    try:
-        await message.bot.send_message(
-            result.invitee.telegram_id,
-            f"{t('friends_invite_incoming', invitee_lang)}\n\n{t('friends_invite_prompt', invitee_lang)}",
-            reply_markup=invite_confirm_keyboard(result.friendship.id, invitee_lang),
-        )
-    except (TelegramForbiddenError, TelegramBadRequest):
-        logger.warning(
-            "cannot message picked user inviter=%s invitee_tg=%s",
-            user_id,
-            result.invitee.telegram_id,
-        )
-        await message.answer(
-            t("friends_pick_failed", lang, name=name),
-            reply_markup=friends_pick_cancel_keyboard(),
-        )
-        return
-
-    await message.answer(
-        t("friends_pick_sent", lang, name=name),
-        reply_markup=friends_pick_cancel_keyboard(),
-    )
 
 
 @router.callback_query(F.data == "friends:invite")

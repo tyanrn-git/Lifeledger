@@ -1,10 +1,9 @@
-from dataclasses import dataclass
+from urllib.parse import quote
 from uuid import UUID
 
 from app.db.repositories.friendships import FriendshipsRepository
 from app.db.repositories.users import UsersRepository
 from app.schemas.friendships import Friendship
-from app.schemas.users import User
 
 
 class FriendshipError(Exception):
@@ -17,13 +16,6 @@ class SelfInviteError(FriendshipError):
 
 class AlreadyFriendsError(FriendshipError):
     pass
-
-
-@dataclass
-class PickerInviteResult:
-    friendship: Friendship
-    invitee: User
-    invitee_display_name: str
 
 
 class FriendshipService:
@@ -39,6 +31,13 @@ class FriendshipService:
 
     def build_invite_link(self, user_id: UUID) -> str:
         return f"https://t.me/{self._bot_username}?start=invite_{user_id}"
+
+    @staticmethod
+    def build_invite_share_url(invite_link: str, share_text: str) -> str:
+        return (
+            "https://t.me/share/url?"
+            f"url={quote(invite_link, safe='')}&text={quote(share_text, safe='')}"
+        )
 
     @staticmethod
     def parse_invite_payload(args: str | None) -> UUID | None:
@@ -94,28 +93,3 @@ class FriendshipService:
 
     async def get_friendship(self, friendship_id: UUID) -> Friendship | None:
         return await self._friendships.get_by_id(friendship_id)
-
-    async def create_invite_from_picker(
-        self,
-        inviter_id: UUID,
-        *,
-        telegram_id: int,
-        username: str | None,
-        first_name: str | None,
-        last_name: str | None,
-        default_language: str = "en",
-    ) -> PickerInviteResult:
-        invitee, _ = await self._users.get_or_create_from_telegram_profile(
-            telegram_id=telegram_id,
-            username=username,
-            first_name=first_name,
-            last_name=last_name,
-            default_language=default_language,
-        )
-        friendship = await self.create_invite_from_link(inviter_id, invitee.id)
-        display_name = first_name or username or "User"
-        return PickerInviteResult(
-            friendship=friendship,
-            invitee=invitee,
-            invitee_display_name=display_name,
-        )
