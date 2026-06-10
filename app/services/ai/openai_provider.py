@@ -38,7 +38,7 @@ class OpenAIProvider(AIProvider):
                     "content": analyze_user_message(original_text, event_type),
                 },
             ],
-            temperature=0.2,
+            temperature=0.1,
         )
         raw = response.choices[0].message.content or "{}"
         data = json.loads(raw)
@@ -78,7 +78,7 @@ class OpenAIProvider(AIProvider):
                     "content": generate_batch_user_message(avoid_texts, count),
                 },
             ],
-            temperature=0.6,
+            temperature=0.4,
         )
         raw = response.choices[0].message.content or '{"events":[]}'
         data = json.loads(raw)

@@ -164,13 +164,17 @@ MESSAGES: dict[str, dict[str, str]] = {
     },
     "friends_screen": {
         "ru": (
-            "Ваши друзья: {count}\n\n"
+            "Ваши друзья ({count}):\n{names}\n\n"
             "Пригласите друга, чтобы получать больше оценок от своего круга общения."
         ),
         "en": (
-            "Your friends: {count}\n\n"
+            "Your friends ({count}):\n{names}\n\n"
             "Invite a friend to get more ratings from your circle."
         ),
+    },
+    "friends_none": {
+        "ru": "Пока нет друзей.",
+        "en": "No friends yet.",
     },
     "friends_invite_link": {
         "ru": "Ваша ссылка для приглашения:\n\n{link}",
@@ -215,8 +219,8 @@ MESSAGES: dict[str, dict[str, str]] = {
         "en": "No incoming invitations.",
     },
     "friends_incoming_title": {
-        "ru": "Входящие приглашения: {count}",
-        "en": "Incoming invitations: {count}",
+        "ru": "Входящие приглашения ({count}):\n{names}",
+        "en": "Incoming invitations ({count}):\n{names}",
     },
     "friends_incoming_item": {
         "ru": "Приглашение {n}",

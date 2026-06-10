@@ -17,11 +17,14 @@ class ImpressionsRepository:
             return
         await self._pool.executemany(
             """
-            insert into event_impressions (event_id, user_id, batch_id, status)
-            values ($1, $2, $3, 'shown')
+            insert into event_impressions (event_id, user_id, batch_id, status, source_priority)
+            values ($1, $2, $3, 'shown', $4)
             on conflict (event_id, user_id) do nothing
             """,
-            [(event_id, user_id, batch_id) for event_id in event_ids],
+            [
+                (event_id, user_id, batch_id, position)
+                for position, event_id in enumerate(event_ids)
+            ],
         )
 
     async def get_next_shown(self, user_id: UUID, batch_id: UUID) -> UUID | None:
@@ -30,7 +33,7 @@ class ImpressionsRepository:
             select event_id
             from event_impressions
             where user_id = $1 and batch_id = $2 and status = 'shown'
-            order by shown_at
+            order by source_priority nulls last, shown_at
             limit 1
             """,
             user_id,

@@ -1,4 +1,3 @@
-import random
 from dataclasses import dataclass
 from uuid import UUID
 
@@ -44,7 +43,6 @@ class FeedService:
             await self._batches.complete_batch(batch_id)
 
         event_ids = await self._fetch_or_generate(user_id)
-        random.shuffle(event_ids)
 
         if not event_ids:
             return FeedStart(UUID(int=0), 0, False, None)

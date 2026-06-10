@@ -12,14 +12,48 @@ from app.bot.keyboards import (
 )
 from app.i18n import t
 from app.schemas.users import User
+from app.schemas.friendships import FriendProfile, PendingFriendInvite
 from app.services.friendship_service import (
     AlreadyFriendsError,
     FriendshipService,
     SelfInviteError,
 )
+from app.utils.user_display import format_user_display_name
 
 logger = logging.getLogger(__name__)
 router = Router()
+
+
+def _format_name_list(profiles: list[FriendProfile], lang: str) -> str:
+    if not profiles:
+        return t("friends_none", lang)
+    return "\n".join(
+        f"• {format_user_display_name(first_name=p.first_name, last_name=p.last_name, username=p.username, lang=lang)}"
+        for p in profiles
+    )
+
+
+def _friends_screen_text(
+    lang: str,
+    friends: list[FriendProfile],
+) -> str:
+    return t(
+        "friends_screen",
+        lang,
+        count=len(friends),
+        names=_format_name_list(friends, lang),
+    )
+
+
+def _incoming_screen_text(
+    lang: str,
+    invites: list[PendingFriendInvite],
+) -> str:
+    names = "\n".join(
+        f"• {format_user_display_name(first_name=i.inviter.first_name, last_name=i.inviter.last_name, username=i.inviter.username, lang=lang)}"
+        for i in invites
+    )
+    return t("friends_incoming_title", lang, count=len(invites), names=names)
 
 
 def _friends_keyboard(
@@ -42,10 +76,10 @@ async def send_friends_screen(
     lang: str,
     friendship_service: FriendshipService,
 ) -> None:
-    count = await friendship_service.count_friends(user_id)
+    friends = await friendship_service.list_friends(user_id)
     pending = await friendship_service.list_pending_incoming(user_id)
     await message.answer(
-        t("friends_screen", lang, count=count),
+        _friends_screen_text(lang, friends),
         reply_markup=_friends_keyboard(lang, len(pending), friendship_service, user_id),
     )
 
@@ -81,10 +115,10 @@ async def friends_main(
     if not callback.message:
         await callback.answer()
         return
-    count = await friendship_service.count_friends(user_id)
+    friends = await friendship_service.list_friends(user_id)
     pending = await friendship_service.list_pending_incoming(user_id)
     await callback.message.edit_text(
-        t("friends_screen", lang, count=count),
+        _friends_screen_text(lang, friends),
         reply_markup=_friends_keyboard(lang, len(pending), friendship_service, user_id),
     )
     await callback.answer()
@@ -114,15 +148,28 @@ async def friends_incoming(
         await callback.answer()
         return
 
-    pending = await friendship_service.list_pending_incoming(user_id)
+    pending = await friendship_service.list_pending_incoming_with_profiles(user_id)
     if not pending:
         await callback.answer(t("friends_incoming_empty", lang), show_alert=True)
         return
 
-    text = t("friends_incoming_title", lang, count=len(pending))
     await callback.message.edit_text(
-        text,
-        reply_markup=friends_incoming_keyboard([p.id for p in pending], lang),
+        _incoming_screen_text(lang, pending),
+        reply_markup=friends_incoming_keyboard(
+            [
+                (
+                    invite.friendship_id,
+                    format_user_display_name(
+                        first_name=invite.inviter.first_name,
+                        last_name=invite.inviter.last_name,
+                        username=invite.inviter.username,
+                        lang=lang,
+                    ),
+                )
+                for invite in pending
+            ],
+            lang,
+        ),
     )
     await callback.answer()
 

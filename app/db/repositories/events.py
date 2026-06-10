@@ -321,7 +321,18 @@ class EventsRepository:
                 ) then 0
                 else 1
               end,
-              case when e.community_ratings_count <= $3 then 0 else 1 end,
+              case
+                when e.author_user_id is not null and exists (
+                  select 1 from friendships f
+                  where f.status = 'accepted'
+                    and (
+                      (f.requester_user_id = $1 and f.addressee_user_id = e.author_user_id)
+                      or (f.addressee_user_id = $1 and f.requester_user_id = e.author_user_id)
+                    )
+                ) then 0
+                when e.community_ratings_count <= $3 then 0
+                else 1
+              end,
               e.created_at desc
             limit $2
             """,

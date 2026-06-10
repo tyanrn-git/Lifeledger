@@ -3,7 +3,7 @@ from uuid import UUID
 
 from app.db.repositories.friendships import FriendshipsRepository
 from app.db.repositories.users import UsersRepository
-from app.schemas.friendships import Friendship
+from app.schemas.friendships import FriendProfile, Friendship, PendingFriendInvite
 
 
 class FriendshipError(Exception):
@@ -90,6 +90,14 @@ class FriendshipService:
 
     async def list_pending_incoming(self, user_id: UUID) -> list[Friendship]:
         return await self._friendships.list_pending_incoming(user_id)
+
+    async def list_friends(self, user_id: UUID) -> list[FriendProfile]:
+        return await self._friendships.list_accepted_friend_profiles(user_id)
+
+    async def list_pending_incoming_with_profiles(
+        self, user_id: UUID
+    ) -> list[PendingFriendInvite]:
+        return await self._friendships.list_pending_incoming_with_profiles(user_id)
 
     async def get_friendship(self, friendship_id: UUID) -> Friendship | None:
         return await self._friendships.get_by_id(friendship_id)

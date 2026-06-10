@@ -262,19 +262,21 @@ def invite_confirm_keyboard(friendship_id: UUID, lang: str) -> InlineKeyboardMar
 
 
 def friends_incoming_keyboard(
-    friendship_ids: Sequence[UUID],
+    invites: Sequence[tuple[UUID, str]],
     lang: str,
 ) -> InlineKeyboardMarkup:
     accept_label = "Подтвердить" if lang == "ru" else "Accept"
     reject_label = "Отклонить" if lang == "ru" else "Decline"
     back_label = "Назад" if lang == "ru" else "Back"
     rows: list[list[InlineKeyboardButton]] = []
-    for i, friendship_id in enumerate(friendship_ids, start=1):
-        prefix = f"{i}. " if len(friendship_ids) > 1 else ""
+    for friendship_id, name in invites:
+        accept_text = f"{name} — {accept_label}"
+        if len(accept_text) > 64:
+            accept_text = accept_text[:61] + "…"
         rows.append(
             [
                 InlineKeyboardButton(
-                    text=f"{prefix}{accept_label}",
+                    text=accept_text,
                     callback_data=f"friend:accept:{friendship_id}",
                 ),
                 InlineKeyboardButton(

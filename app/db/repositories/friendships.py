@@ -2,7 +2,16 @@ from uuid import UUID
 
 import asyncpg
 
-from app.schemas.friendships import Friendship
+from app.schemas.friendships import FriendProfile, Friendship, PendingFriendInvite
+
+
+def _row_to_friend_profile(row: asyncpg.Record) -> FriendProfile:
+    return FriendProfile(
+        user_id=row["id"],
+        first_name=row["first_name"],
+        last_name=row["last_name"],
+        username=row["username"],
+    )
 
 
 def _row_to_friendship(row: asyncpg.Record) -> Friendship:
@@ -139,3 +148,43 @@ class FriendshipsRepository:
             user_id,
         )
         return [_row_to_friendship(row) for row in rows]
+
+    async def list_accepted_friend_profiles(self, user_id: UUID) -> list[FriendProfile]:
+        rows = await self._pool.fetch(
+            """
+            select u.id, u.first_name, u.last_name, u.username
+            from friendships f
+            join users u on u.id = case
+              when f.requester_user_id = $1 then f.addressee_user_id
+              else f.requester_user_id
+            end
+            where f.status = 'accepted'
+              and (f.requester_user_id = $1 or f.addressee_user_id = $1)
+            order by coalesce(u.first_name, u.username, '') asc
+            """,
+            user_id,
+        )
+        return [_row_to_friend_profile(row) for row in rows]
+
+    async def list_pending_incoming_with_profiles(
+        self, user_id: UUID
+    ) -> list[PendingFriendInvite]:
+        rows = await self._pool.fetch(
+            """
+            select
+              f.id as friendship_id,
+              u.id, u.first_name, u.last_name, u.username
+            from friendships f
+            join users u on u.id = f.requester_user_id
+            where f.addressee_user_id = $1 and f.status = 'pending'
+            order by f.created_at desc
+            """,
+            user_id,
+        )
+        return [
+            PendingFriendInvite(
+                friendship_id=row["friendship_id"],
+                inviter=_row_to_friend_profile(row),
+            )
+            for row in rows
+        ]
