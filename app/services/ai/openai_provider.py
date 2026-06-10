@@ -3,12 +3,14 @@ import logging
 
 from openai import AsyncOpenAI
 
-from app.schemas.ai import EventAnalysis
+from app.schemas.ai import EventAnalysis, GeneratedEventsBatch
 from app.services.ai.base import AIProvider
 from app.services.ai.prompts import (
     ANALYZE_SYSTEM,
+    GENERATE_BATCH_SYSTEM,
     TRANSLATE_SYSTEM,
     analyze_user_message,
+    generate_batch_user_message,
     translate_user_message,
 )
 
@@ -60,3 +62,24 @@ class OpenAIProvider(AIProvider):
             temperature=0.2,
         )
         return (response.choices[0].message.content or text).strip()
+
+    async def generate_event_batch(
+        self,
+        avoid_texts: list[str],
+        count: int,
+    ) -> GeneratedEventsBatch:
+        response = await self._client.chat.completions.create(
+            model=self._model,
+            response_format={"type": "json_object"},
+            messages=[
+                {"role": "system", "content": GENERATE_BATCH_SYSTEM},
+                {
+                    "role": "user",
+                    "content": generate_batch_user_message(avoid_texts, count),
+                },
+            ],
+            temperature=0.9,
+        )
+        raw = response.choices[0].message.content or '{"events":[]}'
+        data = json.loads(raw)
+        return GeneratedEventsBatch.model_validate(data)

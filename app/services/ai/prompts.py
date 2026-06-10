@@ -57,6 +57,47 @@ def analyze_user_message(original_text: str, event_type: str) -> str:
     return f"Event type: {kind}\n{extra}\n\nUser text:\n{original_text}"
 
 
+GENERATE_BATCH_SYSTEM = """You generate moral situations for the LifeLedger rating app.
+Users rate concrete actions on a scale from -10 to +10.
+
+Return ONLY valid JSON:
+{
+  "events": [
+    {
+      "normalized_text": "third-person statement of a concrete choice or action",
+      "category": "short topic tag in English, e.g. honesty, family, work",
+      "ai_score": integer -10..10,
+      "action": "brief action phrase",
+      "context": "brief moral context"
+    }
+  ]
+}
+
+Rules:
+- Generate exactly the requested number of events.
+- All must be hypothetical situations with a CONCRETE choice already made.
+- Use neutral third person: "A person chose...", "Человек предпочёл..."
+- Never output open questions or dilemmas without a chosen action.
+- Cover DIVERSE categories — no two events in the same batch on the same theme.
+- Do NOT repeat or closely paraphrase any item from the avoid list.
+- Mix positive, negative, and morally mixed actions.
+- Keep each normalized_text to 1-2 sentences.
+- ai_score must follow the calibration: trivial acts near 0, severe harm below -5, heroic above +7."""
+
+GENERATE_BATCH_AVOID = """Already used situations (do NOT repeat or paraphrase):
+{items}
+
+Generate {count} new diverse moral situations."""
+
+
+def generate_batch_user_message(avoid_texts: list[str], count: int) -> str:
+    if avoid_texts:
+        items = "\n".join(f"- {t}" for t in avoid_texts[:40])
+    else:
+        items = "(none)"
+    return GENERATE_BATCH_AVOID.format(items=items, count=count)
+
+
 def translate_user_message(text: str, source_language: str, target_language: str) -> str:
     return (
         f"Source language: {source_language}\n"

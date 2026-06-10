@@ -1,6 +1,6 @@
 from abc import ABC, abstractmethod
 
-from app.schemas.ai import EventAnalysis
+from app.schemas.ai import EventAnalysis, GeneratedEventsBatch
 
 
 class AIProvider(ABC):
@@ -20,4 +20,12 @@ class AIProvider(ABC):
         source_language: str,
         target_language: str,
     ) -> str:
+        raise NotImplementedError
+
+    @abstractmethod
+    async def generate_event_batch(
+        self,
+        avoid_texts: list[str],
+        count: int,
+    ) -> GeneratedEventsBatch:
         raise NotImplementedError

@@ -1,7 +1,7 @@
 import logging
 from datetime import datetime
 
-from app.schemas.ai import EventAnalysis
+from app.schemas.ai import EventAnalysis, GeneratedEventsBatch
 from app.services.ai.base import AIProvider
 
 logger = logging.getLogger(__name__)
@@ -24,6 +24,19 @@ class AIService:
         except Exception:
             logger.exception("AI analysis failed, using fallback")
             return self._fallback_analysis(original_text, user_language)
+
+    async def generate_event_batch(
+        self,
+        avoid_texts: list[str],
+        count: int,
+    ) -> GeneratedEventsBatch:
+        try:
+            batch = await self._provider.generate_event_batch(avoid_texts, count)
+            if batch.events:
+                return batch
+        except Exception:
+            logger.exception("AI batch generation failed")
+        return GeneratedEventsBatch(events=[])
 
     async def translate_event(
         self,

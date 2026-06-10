@@ -17,6 +17,8 @@ class Settings(BaseSettings):
     default_language: str = "en"
     batch_size: int = 30
     under_rated_threshold: int = 10
+    ai_generation_batch_size: int = 10
+    ai_generation_min_available: int = 10
 
     # polling — локально; webhook — Railway / production
     bot_mode: str = "polling"

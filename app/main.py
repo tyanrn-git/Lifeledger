@@ -20,6 +20,7 @@ from app.db.repositories.translations import TranslationsRepository
 from app.db.repositories.users import UsersRepository
 from app.logging_config import setup_logging
 from app.services.ai.factory import build_ai_provider
+from app.services.ai_generation_service import AIGenerationService
 from app.services.ai_service import AIService
 from app.services.event_service import EventService
 from app.services.feed_service import FeedService
@@ -45,11 +46,14 @@ def build_services(pool, bot_username: str, bot: Bot):
     notifications_repo = NotificationsRepository(pool)
 
     ai_service = AIService(build_ai_provider())
+    ai_generation_service = AIGenerationService(pool, events_repo, ai_service)
 
     return {
         "user_service": UserService(users_repo),
         "event_service": EventService(events_repo, ai_service),
-        "feed_service": FeedService(events_repo, impressions_repo, batches_repo),
+        "feed_service": FeedService(
+            events_repo, impressions_repo, batches_repo, ai_generation_service
+        ),
         "rating_service": RatingService(
             pool, ratings_repo, impressions_repo, events_repo, friendships_repo
         ),

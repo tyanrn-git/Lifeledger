@@ -7,6 +7,7 @@ from app.db.repositories.batches import BatchesRepository
 from app.db.repositories.events import EventsRepository
 from app.db.repositories.impressions import ImpressionsRepository
 from app.schemas.events import EventForRating
+from app.services.ai_generation_service import AIGenerationService
 
 
 @dataclass
@@ -23,10 +24,12 @@ class FeedService:
         events_repo: EventsRepository,
         impressions_repo: ImpressionsRepository,
         batches_repo: BatchesRepository,
+        ai_generation_service: AIGenerationService | None = None,
     ) -> None:
         self._events = events_repo
         self._impressions = impressions_repo
         self._batches = batches_repo
+        self._ai_generation = ai_generation_service
 
     async def start_or_resume(self, user_id: UUID, *, force_new: bool = False) -> FeedStart:
         batch_id = None if force_new else await self._batches.get_active_batch(user_id)
@@ -40,11 +43,7 @@ class FeedService:
                 return FeedStart(batch_id, remaining, False, event)
             await self._batches.complete_batch(batch_id)
 
-        event_ids = await self._events.fetch_available_for_user(
-            user_id,
-            settings.batch_size,
-            settings.under_rated_threshold,
-        )
+        event_ids = await self._fetch_or_generate(user_id)
         random.shuffle(event_ids)
 
         if not event_ids:
@@ -60,6 +59,24 @@ class FeedService:
 
         event = await self._events.get_for_rating(event_ids[0])
         return FeedStart(batch_id, len(event_ids), is_new_batch, event)
+
+    async def _fetch_or_generate(self, user_id: UUID) -> list[UUID]:
+        event_ids = await self._events.fetch_available_for_user(
+            user_id,
+            settings.batch_size,
+            settings.under_rated_threshold,
+        )
+        if (
+            len(event_ids) < settings.ai_generation_min_available
+            and self._ai_generation
+        ):
+            await self._ai_generation.ensure_pool_for_user(user_id)
+            event_ids = await self._events.fetch_available_for_user(
+                user_id,
+                settings.batch_size,
+                settings.under_rated_threshold,
+            )
+        return event_ids
 
     async def get_event(self, event_id: UUID) -> EventForRating | None:
         return await self._events.get_for_rating(event_id)

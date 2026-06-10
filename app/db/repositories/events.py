@@ -3,8 +3,10 @@ from uuid import UUID
 
 import asyncpg
 
+from app.schemas.ai import GeneratedEventDraft
 from app.schemas.events import Event, EventForRating
 from app.schemas.notifications import EventNotificationMeta
+from app.utils.content_hash import content_hash as make_content_hash
 
 
 def _row_to_event(row: asyncpg.Record) -> Event:
@@ -39,14 +41,19 @@ class EventsRepository:
         context_text: str | None = None,
         category: str | None = None,
     ) -> Event:
+        text_hash = make_content_hash(normalized_text)
         row = await self._pool.fetchrow(
             """
             insert into events (
               author_user_id, event_type, original_text, original_language,
               normalized_text, self_score, ai_score, final_community_score,
-              event_time, action_text, context_text, category
+              event_time, action_text, context_text, category,
+              source, content_hash
             )
-            values ($1, $2::event_type, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12)
+            values (
+              $1, $2::event_type, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12,
+              'user'::event_source, $13
+            )
             returning *
             """,
             author_id,
@@ -61,8 +68,104 @@ class EventsRepository:
             action_text,
             context_text,
             category,
+            text_hash,
         )
         return _row_to_event(row)
+
+    async def create_ai_generated_batch(
+        self,
+        drafts: list[GeneratedEventDraft],
+        generation_batch_id: UUID,
+        *,
+        conn: asyncpg.Connection | None = None,
+    ) -> list[UUID]:
+        if not drafts:
+            return []
+
+        executor = conn if conn is not None else self._pool
+        created: list[UUID] = []
+        for draft in drafts:
+            text = draft.normalized_text.strip()
+            if not text:
+                continue
+            text_hash = make_content_hash(text)
+            exists = await executor.fetchval(
+                "select 1 from events where content_hash = $1 and is_deleted = false limit 1",
+                text_hash,
+            )
+            if exists:
+                continue
+
+            ai_score = float(draft.ai_score)
+            self_score = int(draft.ai_score)
+            row = await executor.fetchrow(
+                """
+                insert into events (
+                  author_user_id, event_type, original_text, original_language,
+                  normalized_text, self_score, ai_score, final_community_score,
+                  action_text, context_text, category,
+                  source, generation_batch_id, content_hash
+                )
+                values (
+                  null, 'hypothetical'::event_type, $1, 'en', $1, $2, $3, $3,
+                  $4, $5, $6,
+                  'ai_generated'::event_source, $7, $8
+                )
+                returning id
+                """,
+                text,
+                self_score,
+                ai_score,
+                draft.action,
+                draft.context,
+                draft.category,
+                generation_batch_id,
+                text_hash,
+            )
+            if row:
+                created.append(row["id"])
+        return created
+
+    async def count_available_for_user(self, user_id: UUID) -> int:
+        val = await self._pool.fetchval(
+            """
+            select count(*)::int
+            from events e
+            where e.is_deleted = false
+              and (e.author_user_id is null or e.author_user_id <> $1)
+              and not exists (
+                select 1 from event_impressions ei
+                where ei.event_id = e.id and ei.user_id = $1
+              )
+              and not exists (
+                select 1
+                from event_impressions ei2
+                join events e2 on e2.id = ei2.event_id
+                where ei2.user_id = $1
+                  and e.content_hash is not null
+                  and e2.content_hash = e.content_hash
+              )
+            """,
+            user_id,
+        )
+        return val or 0
+
+    async def list_avoid_texts_for_user(self, user_id: UUID, limit: int = 40) -> list[str]:
+        rows = await self._pool.fetch(
+            """
+            select e.normalized_text
+            from event_impressions ei
+            join events e on e.id = ei.event_id
+            where ei.user_id = $1
+              and e.normalized_text is not null
+            group by e.normalized_text
+            order by max(ei.shown_at) desc
+            limit $2
+            """,
+            user_id,
+            limit,
+        )
+        return [row["normalized_text"] for row in rows]
 
     async def get_for_author(self, event_id: UUID, author_id: UUID) -> Event | None:
         row = await self._pool.fetchrow(
@@ -197,6 +300,14 @@ class EventsRepository:
               and not exists (
                 select 1 from event_impressions ei
                 where ei.event_id = e.id and ei.user_id = $1
+              )
+              and not exists (
+                select 1
+                from event_impressions ei2
+                join events e2 on e2.id = ei2.event_id
+                where ei2.user_id = $1
+                  and e.content_hash is not null
+                  and e2.content_hash = e.content_hash
               )
             order by
               case
