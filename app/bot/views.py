@@ -41,9 +41,8 @@ def event_added_text(event: Event, lang: str) -> str:
 
 
 def event_card_text(event: EventForRating, lang: str, display_text: str | None = None) -> str:
-    type_key = "event_type_real" if event.event_type == "real" else "event_type_hypothetical"
     text = display_text if display_text is not None else event.normalized_text
-    return f"{t(type_key, lang)}\n\n{text}\n\n{t('rate_prompt', lang)}"
+    return f"{text}\n\n{t('rate_prompt', lang)}"
 
 
 def rating_result_text(score: int, event: EventForRating, lang: str) -> str:

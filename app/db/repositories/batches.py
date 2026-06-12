@@ -36,6 +36,16 @@ class BatchesRepository:
             batch_id,
         )
 
+    async def list_users_with_active_batches(self) -> list[UUID]:
+        rows = await self._pool.fetch(
+            """
+            select distinct user_id
+            from rating_batches
+            where completed_at is null
+            """
+        )
+        return [row["user_id"] for row in rows]
+
     async def count_remaining(self, user_id: UUID, batch_id: UUID) -> int:
         return await self._pool.fetchval(
             """

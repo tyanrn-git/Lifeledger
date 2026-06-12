@@ -12,9 +12,12 @@ class ImpressionsRepository:
         user_id: UUID,
         batch_id: UUID,
         event_ids: list[UUID],
+        source_priorities: list[int] | None = None,
     ) -> None:
         if not event_ids:
             return
+        if source_priorities is None:
+            source_priorities = list(range(len(event_ids)))
         await self._pool.executemany(
             """
             insert into event_impressions (event_id, user_id, batch_id, status, source_priority)
@@ -22,10 +25,41 @@ class ImpressionsRepository:
             on conflict (event_id, user_id) do nothing
             """,
             [
-                (event_id, user_id, batch_id, position)
-                for position, event_id in enumerate(event_ids)
+                (event_id, user_id, batch_id, priority)
+                for event_id, priority in zip(event_ids, source_priorities)
             ],
         )
+
+    async def inject_into_batch(
+        self,
+        user_id: UUID,
+        batch_id: UUID,
+        event_id: UUID,
+        source_priority: int,
+    ) -> bool:
+        result = await self._pool.execute(
+            """
+            insert into event_impressions (event_id, user_id, batch_id, status, source_priority)
+            values ($1, $2, $3, 'shown', $4)
+            on conflict (event_id, user_id) do nothing
+            """,
+            event_id,
+            user_id,
+            batch_id,
+            source_priority,
+        )
+        return result.endswith("1")
+
+    async def is_in_batch(self, batch_id: UUID, event_id: UUID) -> bool:
+        val = await self._pool.fetchval(
+            """
+            select 1 from event_impressions
+            where batch_id = $1 and event_id = $2
+            """,
+            batch_id,
+            event_id,
+        )
+        return val is not None
 
     async def get_next_shown(self, user_id: UUID, batch_id: UUID) -> UUID | None:
         return await self._pool.fetchval(

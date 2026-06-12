@@ -5,9 +5,28 @@ import asyncpg
 
 from app.schemas.ai import GeneratedEventDraft
 from app.schemas.events import Event, EventForRating
+from app.schemas.feed import FeedEventCandidate
 from app.schemas.notifications import EventNotificationMeta
 from app.utils.content_hash import content_hash as make_content_hash
+from app.utils.feed_priority import FEED_TIER_ORDER_SQL
 from app.utils.scoring import SCORING_CALIBRATION_VERSION
+
+_FEED_VISIBILITY_WHERE = """
+  e.is_deleted = false
+  and (e.author_user_id is null or e.author_user_id <> $1)
+  and not exists (
+    select 1 from event_impressions ei
+    where ei.event_id = e.id and ei.user_id = $1
+  )
+  and not exists (
+    select 1
+    from event_impressions ei2
+    join events e2 on e2.id = ei2.event_id
+    where ei2.user_id = $1
+      and e.content_hash is not null
+      and e2.content_hash = e.content_hash
+  )
+"""
 
 
 def _row_to_event(row: asyncpg.Record) -> Event:
@@ -298,53 +317,102 @@ class EventsRepository:
         limit: int,
         under_rated_threshold: int,
     ) -> list[UUID]:
+        candidates = await self.fetch_available_candidates(
+            user_id, limit, under_rated_threshold
+        )
+        return [row.id for row in candidates]
+
+    async def fetch_available_candidates(
+        self,
+        user_id: UUID,
+        limit: int,
+        under_rated_threshold: int,
+    ) -> list[FeedEventCandidate]:
         rows = await self._pool.fetch(
-            """
-            select e.id
+            f"""
+            select
+              e.id,
+              e.created_at,
+              {FEED_TIER_ORDER_SQL} as feed_tier
             from events e
-            where e.is_deleted = false
-              and (e.author_user_id is null or e.author_user_id <> $1)
-              and not exists (
-                select 1 from event_impressions ei
-                where ei.event_id = e.id and ei.user_id = $1
-              )
-              and not exists (
-                select 1
-                from event_impressions ei2
-                join events e2 on e2.id = ei2.event_id
-                where ei2.user_id = $1
-                  and e.content_hash is not null
-                  and e2.content_hash = e.content_hash
-              )
-            order by
-              case
-                when e.author_user_id is not null and exists (
-                  select 1 from friendships f
-                  where f.status = 'accepted'
-                    and (
-                      (f.requester_user_id = $1 and f.addressee_user_id = e.author_user_id)
-                      or (f.addressee_user_id = $1 and f.requester_user_id = e.author_user_id)
-                    )
-                ) then 0
-                else 1
-              end,
-              case
-                when e.author_user_id is not null and exists (
-                  select 1 from friendships f
-                  where f.status = 'accepted'
-                    and (
-                      (f.requester_user_id = $1 and f.addressee_user_id = e.author_user_id)
-                      or (f.addressee_user_id = $1 and f.requester_user_id = e.author_user_id)
-                    )
-                ) then 0
-                when e.community_ratings_count <= $3 then 0
-                else 1
-              end,
-              e.created_at desc
+            where {_FEED_VISIBILITY_WHERE}
+            order by feed_tier, e.created_at desc
             limit $2
             """,
             user_id,
             limit,
-            under_rated_threshold,
         )
-        return [row["id"] for row in rows]
+        return [
+            FeedEventCandidate(
+                id=row["id"],
+                created_at=row["created_at"],
+                feed_tier=row["feed_tier"],
+            )
+            for row in rows
+        ]
+
+    async def is_visible_to_user(self, user_id: UUID, event_id: UUID) -> bool:
+        val = await self._pool.fetchval(
+            f"""
+            select 1
+            from events e
+            where e.id = $2
+              and {_FEED_VISIBILITY_WHERE}
+            """,
+            user_id,
+            event_id,
+        )
+        return val is not None
+
+    async def get_feed_meta(self, event_id: UUID) -> FeedEventCandidate | None:
+        row = await self._pool.fetchrow(
+            """
+            select id, created_at, 0 as feed_tier
+            from events
+            where id = $1 and is_deleted = false
+            """,
+            event_id,
+        )
+        if not row:
+            return None
+        return FeedEventCandidate(
+            id=row["id"],
+            created_at=row["created_at"],
+            feed_tier=row["feed_tier"],
+        )
+
+    async def list_user_events_for_injection(
+        self,
+        user_id: UUID,
+        batch_id: UUID,
+        limit: int = 50,
+    ) -> list[FeedEventCandidate]:
+        rows = await self._pool.fetch(
+            f"""
+            select
+              e.id,
+              e.created_at,
+              {FEED_TIER_ORDER_SQL} as feed_tier
+            from events e
+            where {_FEED_VISIBILITY_WHERE}
+              and e.author_user_id is not null
+              and coalesce(e.source::text, 'user') = 'user'
+              and not exists (
+                select 1 from event_impressions ei
+                where ei.batch_id = $2 and ei.event_id = e.id
+              )
+            order by feed_tier, e.created_at desc
+            limit $3
+            """,
+            user_id,
+            batch_id,
+            limit,
+        )
+        return [
+            FeedEventCandidate(
+                id=row["id"],
+                created_at=row["created_at"],
+                feed_tier=row["feed_tier"],
+            )
+            for row in rows
+        ]

@@ -49,13 +49,18 @@ def build_services(pool, bot_username: str, bot: Bot, *, ai_service: AIService |
     if ai_service is None:
         ai_service = AIService(build_ai_provider())
     ai_generation_service = AIGenerationService(pool, events_repo, ai_service)
+    feed_service = FeedService(
+        events_repo,
+        impressions_repo,
+        batches_repo,
+        friendships_repo,
+        ai_generation_service,
+    )
 
     return {
         "user_service": UserService(users_repo),
-        "event_service": EventService(events_repo, ai_service),
-        "feed_service": FeedService(
-            events_repo, impressions_repo, batches_repo, ai_generation_service
-        ),
+        "event_service": EventService(events_repo, ai_service, feed_service),
+        "feed_service": feed_service,
         "rating_service": RatingService(
             pool, ratings_repo, impressions_repo, events_repo, friendships_repo
         ),

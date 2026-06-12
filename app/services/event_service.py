@@ -1,15 +1,26 @@
 from datetime import datetime
 from uuid import UUID
 
+from typing import TYPE_CHECKING
+
 from app.db.repositories.events import EventsRepository
 from app.schemas.events import Event
 from app.services.ai_service import AIService
 
+if TYPE_CHECKING:
+    from app.services.feed_service import FeedService
+
 
 class EventService:
-    def __init__(self, events_repo: EventsRepository, ai_service: AIService) -> None:
+    def __init__(
+        self,
+        events_repo: EventsRepository,
+        ai_service: AIService,
+        feed_service: FeedService | None = None,
+    ) -> None:
         self._events = events_repo
         self._ai = ai_service
+        self._feed = feed_service
 
     async def create_event(
         self,
@@ -24,7 +35,7 @@ class EventService:
         event_time = AIService.parse_event_time(analysis.event_time_iso)
         ai_score = float(analysis.ai_score)
 
-        return await self._events.create(
+        event = await self._events.create(
             author_id=author_id,
             event_type=event_type,
             original_text=text,
@@ -38,6 +49,9 @@ class EventService:
             context_text=analysis.context,
             category=analysis.category,
         )
+        if self._feed:
+            await self._feed.on_user_event_created(event.id, author_id)
+        return event
 
     async def get_user_events(self, user_id: UUID) -> list[Event]:
         return await self._events.list_by_author(user_id)

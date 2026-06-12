@@ -166,6 +166,21 @@ class FriendshipsRepository:
         )
         return [_row_to_friend_profile(row) for row in rows]
 
+    async def list_friend_user_ids(self, user_id: UUID) -> list[UUID]:
+        rows = await self._pool.fetch(
+            """
+            select case
+              when requester_user_id = $1 then addressee_user_id
+              else requester_user_id
+            end as friend_id
+            from friendships
+            where status = 'accepted'
+              and (requester_user_id = $1 or addressee_user_id = $1)
+            """,
+            user_id,
+        )
+        return [row["friend_id"] for row in rows]
+
     async def list_pending_incoming_with_profiles(
         self, user_id: UUID
     ) -> list[PendingFriendInvite]:
