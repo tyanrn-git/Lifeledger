@@ -132,6 +132,7 @@ async def friends_invite(
     friendship_service: FriendshipService,
 ) -> None:
     link = friendship_service.build_invite_link(user_id)
+    await friendship_service.track_invite_link_requested(user_id)
     if callback.message:
         await callback.message.answer(t("friends_invite_link", lang, link=link))
     await callback.answer()

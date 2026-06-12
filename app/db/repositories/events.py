@@ -13,6 +13,7 @@ from app.utils.scoring import SCORING_CALIBRATION_VERSION
 
 _FEED_VISIBILITY_WHERE = """
   e.is_deleted = false
+  and e.is_feed_hidden = false
   and (e.author_user_id is null or e.author_user_id <> $1)
   and not exists (
     select 1 from event_impressions ei

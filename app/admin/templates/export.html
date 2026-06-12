@@ -1,0 +1,35 @@
+{% extends "base.html" %}
+{% block title %}Export — LifeLedger Admin{% endblock %}
+{% block content %}
+<h1>CSV Export</h1>
+<p class="hint">Диапазон дат обязателен (макс. 90 дней). Лимит — 50&nbsp;000 строк.</p>
+
+{% if error %}
+<p class="error">{{ error }}</p>
+{% endif %}
+
+<div class="card">
+  <form method="post" action="/admin/export" onsubmit="return confirm('Скачать CSV? Данные содержат PII — только для внутреннего использования.');">
+    <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+    <div class="filter-grid">
+      <label>
+        Тип
+        <select name="export_type" required>
+          {% for key, label in export_types.items() %}
+          <option value="{{ key }}">{{ label }}</option>
+          {% endfor %}
+        </select>
+      </label>
+      <label>
+        С
+        <input type="date" name="date_from" value="{{ date_from }}" required>
+      </label>
+      <label>
+        По
+        <input type="date" name="date_to" value="{{ date_to }}" required>
+      </label>
+    </div>
+    <button type="submit">Скачать CSV</button>
+  </form>
+</div>
+{% endblock %}

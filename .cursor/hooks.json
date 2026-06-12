@@ -1,0 +1,11 @@
+{
+  "version": 1,
+  "hooks": {
+    "afterShellExecution": [
+      {
+        "command": ".cursor/hooks/wait-railway-after-push.sh",
+        "matcher": "git push"
+      }
+    ]
+  }
+}

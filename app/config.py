@@ -20,6 +20,9 @@ class Settings(BaseSettings):
     ai_generation_batch_size: int = 10
     ai_generation_min_available: int = 10
 
+    admin_password: str = ""
+    admin_session_ttl_hours: int = 24
+
     # polling — локально; webhook — Railway / production
     bot_mode: str = "polling"
     webhook_url: str = ""

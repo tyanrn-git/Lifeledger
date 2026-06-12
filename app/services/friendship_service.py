@@ -1,9 +1,13 @@
+from typing import TYPE_CHECKING
 from urllib.parse import quote
 from uuid import UUID
 
 from app.db.repositories.friendships import FriendshipsRepository
 from app.db.repositories.users import UsersRepository
 from app.schemas.friendships import FriendProfile, Friendship, PendingFriendInvite
+
+if TYPE_CHECKING:
+    from app.services.analytics_service import AnalyticsService
 
 
 class FriendshipError(Exception):
@@ -24,10 +28,12 @@ class FriendshipService:
         friendships_repo: FriendshipsRepository,
         users_repo: UsersRepository,
         bot_username: str,
+        analytics_service: "AnalyticsService | None" = None,
     ) -> None:
         self._friendships = friendships_repo
         self._users = users_repo
         self._bot_username = bot_username
+        self._analytics = analytics_service
 
     def build_invite_link(self, user_id: UUID) -> str:
         return f"https://t.me/{self._bot_username}?start=invite_{user_id}"
@@ -75,15 +81,39 @@ class FriendshipService:
                 friendship = await self._friendships.get_by_id(existing.id)
                 if not friendship:
                     raise FriendshipError("friendship_not_found")
+                await self._track_acceptance(invitee_id, inviter_id)
                 return friendship
 
-        return await self._friendships.create_pending(inviter_id, invitee_id)
+        friendship = await self._friendships.create_pending(inviter_id, invitee_id)
+        await self._track_invite(inviter_id, invitee_id)
+        return friendship
 
     async def accept_friendship(self, friendship_id: UUID, user_id: UUID) -> bool:
-        return await self._friendships.accept(friendship_id, user_id)
+        friendship = await self._friendships.get_by_id(friendship_id)
+        if not friendship:
+            return False
+        ok = await self._friendships.accept(friendship_id, user_id)
+        if ok:
+            friend_id = self._other_user_id(friendship, user_id)
+            if friend_id:
+                await self._track_acceptance(user_id, friend_id)
+        return ok
 
     async def reject_friendship(self, friendship_id: UUID, user_id: UUID) -> bool:
-        return await self._friendships.reject(friendship_id, user_id)
+        friendship = await self._friendships.get_by_id(friendship_id)
+        if not friendship:
+            return False
+        ok = await self._friendships.reject(friendship_id, user_id)
+        if ok and self._analytics:
+            friend_id = self._other_user_id(friendship, user_id)
+            props = {}
+            if friend_id:
+                props["friend_user_id"] = str(friend_id)
+            await self._analytics.track("friendship_rejected", user_id, **props)
+        return ok
+
+    async def track_invite_link_requested(self, user_id: UUID) -> None:
+        await self._track_invite(user_id, None)
 
     async def count_friends(self, user_id: UUID) -> int:
         return await self._friendships.count_accepted_friends(user_id)
@@ -101,3 +131,28 @@ class FriendshipService:
 
     async def get_friendship(self, friendship_id: UUID) -> Friendship | None:
         return await self._friendships.get_by_id(friendship_id)
+
+    @staticmethod
+    def _other_user_id(friendship: Friendship, user_id: UUID) -> UUID | None:
+        if friendship.requester_user_id == user_id:
+            return friendship.addressee_user_id
+        if friendship.addressee_user_id == user_id:
+            return friendship.requester_user_id
+        return None
+
+    async def _track_invite(self, inviter_id: UUID, invitee_id: UUID | None) -> None:
+        if not self._analytics:
+            return
+        props: dict[str, str] = {}
+        if invitee_id:
+            props["friend_user_id"] = str(invitee_id)
+        await self._analytics.track("friend_invite_sent", inviter_id, **props)
+
+    async def _track_acceptance(self, user_id: UUID, friend_id: UUID) -> None:
+        if not self._analytics:
+            return
+        await self._analytics.track(
+            "friendship_accepted",
+            user_id,
+            friend_user_id=str(friend_id),
+        )

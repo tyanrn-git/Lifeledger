@@ -10,6 +10,7 @@ from app.schemas.events import Event
 from app.services.ai_service import AIService
 
 if TYPE_CHECKING:
+    from app.services.analytics_service import AnalyticsService
     from app.services.feed_service import FeedService
 
 
@@ -19,10 +20,12 @@ class EventService:
         events_repo: EventsRepository,
         ai_service: AIService,
         feed_service: FeedService | None = None,
+        analytics_service: "AnalyticsService | None" = None,
     ) -> None:
         self._events = events_repo
         self._ai = ai_service
         self._feed = feed_service
+        self._analytics = analytics_service
 
     async def create_event(
         self,
@@ -53,6 +56,14 @@ class EventService:
         )
         if self._feed:
             await self._feed.on_user_event_created(event.id, author_id)
+        if self._analytics:
+            await self._analytics.track(
+                "event_created",
+                author_id,
+                event_id=str(event.id),
+                event_type=event_type,
+                source="user",
+            )
         return event
 
     async def get_user_events(self, user_id: UUID) -> list[Event]:
@@ -62,4 +73,11 @@ class EventService:
         return await self._events.get_for_author(event_id, user_id)
 
     async def delete_event(self, event_id: UUID, user_id: UUID) -> bool:
-        return await self._events.soft_delete(event_id, user_id)
+        deleted = await self._events.soft_delete(event_id, user_id)
+        if deleted and self._analytics:
+            await self._analytics.track(
+                "event_deleted",
+                user_id,
+                event_id=str(event_id),
+            )
+        return deleted

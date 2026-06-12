@@ -1,0 +1,73 @@
+{% extends "base.html" %}
+{% block title %}Ratings — LifeLedger Admin{% endblock %}
+{% block content %}
+<h1>Ratings Analytics</h1>
+
+<div class="kpi-grid">
+  <div class="kpi"><span class="kpi-label">Avg rating score</span><span class="kpi-value">{{ summary.avg_rating_score | default('—', true) }}</span></div>
+  <div class="kpi"><span class="kpi-label">Avg self (events)</span><span class="kpi-value">{{ summary.avg_self | default('—', true) }}</span></div>
+  <div class="kpi"><span class="kpi-label">Avg friends</span><span class="kpi-value">{{ summary.avg_friends | default('—', true) }}</span></div>
+  <div class="kpi"><span class="kpi-label">Avg community</span><span class="kpi-value">{{ summary.avg_community | default('—', true) }}</span></div>
+  <div class="kpi"><span class="kpi-label">Avg AI score</span><span class="kpi-value">{{ summary.avg_ai | default('—', true) }}</span></div>
+</div>
+
+<div class="card chart-card">
+  <h2>Распределение оценок (−10…+10)</h2>
+  <canvas id="histChart" height="120"></canvas>
+</div>
+
+<div class="two-col">
+  <div class="card">
+    <h2>По category</h2>
+    <table class="data-table compact">
+      <thead><tr><th>Category</th><th>Count</th><th>Avg</th></tr></thead>
+      <tbody>
+        {% for r in summary.by_category %}
+        <tr><td>{{ r.key }}</td><td>{{ r.count }}</td><td>{{ r.avg_score | default('—', true) }}</td></tr>
+        {% else %}<tr><td colspan="3" class="hint">—</td></tr>{% endfor %}
+      </tbody>
+    </table>
+  </div>
+  <div class="card">
+    <h2>По language</h2>
+    <table class="data-table compact">
+      <thead><tr><th>Lang</th><th>Count</th><th>Avg</th></tr></thead>
+      <tbody>
+        {% for r in summary.by_language %}
+        <tr><td>{{ r.key }}</td><td>{{ r.count }}</td><td>{{ r.avg_score | default('—', true) }}</td></tr>
+        {% else %}<tr><td colspan="3" class="hint">—</td></tr>{% endfor %}
+      </tbody>
+    </table>
+  </div>
+</div>
+
+<div class="card">
+  <h2>Self vs community (top отклонения)</h2>
+  <table class="data-table compact">
+    <thead><tr><th>Event</th><th>Self</th><th>Community</th><th>Δ</th></tr></thead>
+    <tbody>
+      {% for r in summary.self_vs_community %}
+      <tr>
+        <td><a href="/admin/events/{{ r.event_id }}">{{ r.preview }}</a></td>
+        <td>{{ r.self_score }}</td>
+        <td>{{ r.final_community_score }}</td>
+        <td>{{ r.delta }}</td>
+      </tr>
+      {% else %}<tr><td colspan="4" class="hint">—</td></tr>{% endfor %}
+    </tbody>
+  </table>
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
+<script>
+const data = {{ summary.histogram_json | safe }};
+new Chart(document.getElementById('histChart'), {
+  type: 'bar',
+  data: {
+    labels: data.map(p => p.score),
+    datasets: [{ label: 'Ratings', data: data.map(p => p.count) }]
+  },
+  options: { responsive: true, plugins: { legend: { display: false } } }
+});
+</script>
+{% endblock %}

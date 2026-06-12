@@ -1,0 +1,103 @@
+{% extends "base.html" %}
+{% from "_pagination.html" import pagination_bar %}
+{% block title %}Events — LifeLedger Admin{% endblock %}
+{% block content %}
+<h1>Events</h1>
+<p class="hint">Всего: {{ page.total }}</p>
+
+<form class="filters card" method="get" action="/admin/events">
+  <div class="filter-grid">
+    <label>Source
+      <select name="source">
+        <option value="">—</option>
+        <option value="seed" {% if filters.source == 'seed' %}selected{% endif %}>seed</option>
+        <option value="user" {% if filters.source == 'user' %}selected{% endif %}>user</option>
+        <option value="ai_generated" {% if filters.source == 'ai_generated' %}selected{% endif %}>ai_generated</option>
+      </select>
+    </label>
+    <label>Only
+      <select name="only">
+        <option value="">—</option>
+        <option value="ai" {% if filters.only == 'ai' %}selected{% endif %}>AI only</option>
+        <option value="user" {% if filters.only == 'user' %}selected{% endif %}>User only</option>
+      </select>
+    </label>
+    <label>Category
+      <select name="category">
+        <option value="">—</option>
+        {% for c in categories %}
+        <option value="{{ c }}" {% if filters.category == c %}selected{% endif %}>{{ c }}</option>
+        {% endfor %}
+      </select>
+    </label>
+    <label>Language <input type="text" name="language" value="{{ filters.language or '' }}"></label>
+    <label>Type
+      <select name="event_type">
+        <option value="">—</option>
+        <option value="real" {% if filters.event_type == 'real' %}selected{% endif %}>real</option>
+        <option value="hypothetical" {% if filters.event_type == 'hypothetical' %}selected{% endif %}>hypothetical</option>
+      </select>
+    </label>
+    <label>Score min <input type="number" step="0.1" name="score_min" value="{{ filters.score_min if filters.score_min is not none else '' }}"></label>
+    <label>Score max <input type="number" step="0.1" name="score_max" value="{{ filters.score_max if filters.score_max is not none else '' }}"></label>
+    <label>Deleted
+      <select name="is_deleted">
+        <option value="">—</option>
+        <option value="no" {% if filters.is_deleted == 'no' %}selected{% endif %}>нет</option>
+        <option value="yes" {% if filters.is_deleted == 'yes' %}selected{% endif %}>да</option>
+      </select>
+    </label>
+    <label>Hidden
+      <select name="is_feed_hidden">
+        <option value="">—</option>
+        <option value="no" {% if filters.is_feed_hidden == 'no' %}selected{% endif %}>нет</option>
+        <option value="yes" {% if filters.is_feed_hidden == 'yes' %}selected{% endif %}>да</option>
+      </select>
+    </label>
+  </div>
+  <button type="submit">Фильтр</button>
+  <a class="btn-link" href="/admin/events">Сброс</a>
+</form>
+
+<div class="card">
+  <table class="data-table">
+    <thead>
+      <tr>
+        <th>Preview</th>
+        <th>Source</th>
+        <th>Type</th>
+        <th>Category</th>
+        <th>Author</th>
+        <th>Score</th>
+        <th>Ratings</th>
+        <th>Views</th>
+        <th>Flags</th>
+        <th>Created</th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for e in events %}
+      <tr>
+        <td><a href="/admin/events/{{ e.id }}">{{ e.preview }}</a></td>
+        <td>{{ e.source }}</td>
+        <td>{{ e.event_type }}</td>
+        <td>{{ e.category or '—' }}</td>
+        <td>
+          {% if e.author_user_id %}
+          <a href="/admin/users/{{ e.author_user_id }}">{{ e.author_name or e.author_user_id }}</a>
+          {% else %}—{% endif %}
+        </td>
+        <td>{{ e.final_community_score if e.final_community_score is not none else e.self_score }}</td>
+        <td>{{ e.community_ratings_count }}</td>
+        <td>{{ e.impressions_count }}</td>
+        <td>{% if e.is_deleted %}del{% endif %}{% if e.is_feed_hidden %} hide{% endif %}</td>
+        <td>{{ e.created_at.strftime('%Y-%m-%d') }}</td>
+      </tr>
+      {% else %}
+      <tr><td colspan="10" class="hint">Нет событий</td></tr>
+      {% endfor %}
+    </tbody>
+  </table>
+  {{ pagination_bar(page, '/admin/events', filter_query) }}
+</div>
+{% endblock %}

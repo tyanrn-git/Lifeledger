@@ -6,6 +6,7 @@ from aiogram.types import CallbackQuery, Message
 
 from app.bot.keyboards import language_picker_keyboard, settings_keyboard
 from app.i18n import t
+from app.services.analytics_service import AnalyticsService
 from app.services.user_service import UserService
 from app.utils.languages import language_display_name
 
@@ -78,12 +79,18 @@ async def settings_enable(
     user_id,
     lang: str,
     user_service: UserService,
+    analytics_service: AnalyticsService,
 ) -> None:
     if not callback.message:
         await callback.answer()
         return
 
     await user_service.set_notifications_enabled(user_id, True)
+    await analytics_service.track(
+        "settings_notifications_changed",
+        user_id,
+        enabled=True,
+    )
     await _edit_settings(callback, user_service, user_id, lang)
     await callback.answer(t("settings_notifications_enabled", lang))
 
@@ -94,12 +101,18 @@ async def settings_disable(
     user_id,
     lang: str,
     user_service: UserService,
+    analytics_service: AnalyticsService,
 ) -> None:
     if not callback.message:
         await callback.answer()
         return
 
     await user_service.set_notifications_enabled(user_id, False)
+    await analytics_service.track(
+        "settings_notifications_changed",
+        user_id,
+        enabled=False,
+    )
     await _edit_settings(callback, user_service, user_id, lang)
     await callback.answer(t("settings_notifications_disabled", lang))
 
@@ -139,6 +152,7 @@ async def settings_language_set(
     user_id,
     lang: str,
     user_service: UserService,
+    analytics_service: AnalyticsService,
 ) -> None:
     if not callback.message or not callback.data:
         await callback.answer()
@@ -146,5 +160,10 @@ async def settings_language_set(
 
     code = callback.data.split(":", 3)[3]
     await user_service.set_content_language(user_id, code)
+    await analytics_service.track(
+        "settings_language_changed",
+        user_id,
+        language_code=code,
+    )
     await _edit_settings(callback, user_service, user_id, lang)
     await callback.answer(t("settings_content_language_changed", lang))

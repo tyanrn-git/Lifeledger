@@ -1,0 +1,38 @@
+{% extends "base.html" %}
+{% block title %}Notifications — LifeLedger Admin{% endblock %}
+{% block content %}
+<h1>Notifications</h1>
+
+<div class="kpi-grid">
+  <div class="kpi"><span class="kpi-label">Created</span><span class="kpi-value">{{ summary.created_total }}</span></div>
+  <div class="kpi"><span class="kpi-label">Sent</span><span class="kpi-value">{{ summary.sent_total }}</span></div>
+  <div class="kpi"><span class="kpi-label">Failed (stale unsent)</span><span class="kpi-value">{{ summary.failed_stale }}</span></div>
+  <div class="kpi"><span class="kpi-label">Failed (log 7d)</span><span class="kpi-value">{{ summary.failed_log_7d }}</span></div>
+  <div class="kpi"><span class="kpi-label">Users notifications off</span><span class="kpi-value">{{ summary.users_disabled }}</span></div>
+</div>
+
+<div class="card">
+  <h2>По типам</h2>
+  <table class="data-table compact">
+    <thead><tr><th>Type</th><th>Total</th><th>Sent</th><th>Pending</th></tr></thead>
+    <tbody>
+      {% for t in summary.by_type %}
+      <tr>
+        <td><code>{{ t.notification_type }}</code></td>
+        <td>{{ t.total }}</td>
+        <td>{{ t.sent }}</td>
+        <td>{{ t.pending }}</td>
+      </tr>
+      {% else %}<tr><td colspan="4" class="hint">Нет уведомлений</td></tr>{% endfor %}
+    </tbody>
+  </table>
+  <p class="hint"><code>community_score_changed</code> — в боте не реализован (0 до внедрения).</p>
+</div>
+
+<div class="card">
+  <h2>Последние notification_failed (log)</h2>
+  {% if summary.recent_failures %}
+  <ul>{% for ts, props in summary.recent_failures %}<li><code>{{ ts.strftime('%m-%d %H:%M') }}</code> <span class="mono">{{ props }}</span></li>{% endfor %}</ul>
+  {% else %}<p class="hint">Нет</p>{% endif %}
+</div>
+{% endblock %}

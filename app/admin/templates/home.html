@@ -1,0 +1,16 @@
+{% extends "base.html" %}
+{% block title %}Home — LifeLedger Admin{% endblock %}
+{% block content %}
+<div class="card">
+  <h1>LifeLedger Admin</h1>
+  <p>Журнал действий: <strong>{{ event_count }}</strong> записей в <code>admin_event_log</code>.</p>
+  <p>
+    <a href="/admin/dashboard">Dashboard</a> — метрики, графики и расшифровка логов.<br>
+    <a href="/admin/funnels">Funnels</a> — воронка пользователей.<br>
+    <a href="/admin/users">Users</a> — список и карточки пользователей.<br>
+    <a href="/admin/events">Events</a> — список и карточки событий.<br>
+    <a href="/admin/events/lifecycle">Lifecycle</a> — жизненный цикл событий.<br>
+    <a href="/admin/ratings">Ratings</a>, <a href="/admin/feed">Feed</a>, <a href="/admin/ai">AI</a>, <a href="/admin/notifications">Notifications</a> — аналитика.
+  </p>
+</div>
+{% endblock %}

@@ -1,0 +1,101 @@
+{% extends "base.html" %}
+{% from "_pagination.html" import pagination_bar %}
+{% block title %}Event Lifecycle — LifeLedger Admin{% endblock %}
+{% block content %}
+<h1>Event Lifecycle</h1>
+<p class="hint">Глобальный жизненный цикл событий — показы, skip, оценки, споры.</p>
+
+<div class="period-tabs">
+  {% for key, label in presets.items() %}
+  <a href="/admin/events/lifecycle?preset={{ key }}" class="{% if filters.preset == key or (not filters.preset and not key) %}active{% endif %}">{{ label }}</a>
+  {% endfor %}
+</div>
+
+<form class="filters card" method="get" action="/admin/events/lifecycle">
+  {% if filters.preset %}<input type="hidden" name="preset" value="{{ filters.preset }}">{% endif %}
+  <div class="filter-grid">
+    <label>Source
+      <select name="source">
+        <option value="">—</option>
+        <option value="seed" {% if filters.source == 'seed' %}selected{% endif %}>seed</option>
+        <option value="user" {% if filters.source == 'user' %}selected{% endif %}>user</option>
+        <option value="ai_generated" {% if filters.source == 'ai_generated' %}selected{% endif %}>ai_generated</option>
+      </select>
+    </label>
+    <label>Category
+      <select name="category">
+        <option value="">—</option>
+        {% for c in categories %}
+        <option value="{{ c }}" {% if filters.category == c %}selected{% endif %}>{{ c }}</option>
+        {% endfor %}
+      </select>
+    </label>
+    <label>Type
+      <select name="event_type">
+        <option value="">—</option>
+        <option value="real" {% if filters.event_type == 'real' %}selected{% endif %}>real</option>
+        <option value="hypothetical" {% if filters.event_type == 'hypothetical' %}selected{% endif %}>hypothetical</option>
+      </select>
+    </label>
+    <label>Created from <input type="date" name="created_from" value="{{ filters.created_from or '' }}"></label>
+    <label>Created to <input type="date" name="created_to" value="{{ filters.created_to or '' }}"></label>
+    <label>Deleted
+      <select name="is_deleted">
+        <option value="">—</option>
+        <option value="no" {% if filters.is_deleted == 'no' %}selected{% endif %}>нет</option>
+        <option value="yes" {% if filters.is_deleted == 'yes' %}selected{% endif %}>да</option>
+      </select>
+    </label>
+    <label>Hidden
+      <select name="is_feed_hidden">
+        <option value="">—</option>
+        <option value="no" {% if filters.is_feed_hidden == 'no' %}selected{% endif %}>нет</option>
+        <option value="yes" {% if filters.is_feed_hidden == 'yes' %}selected{% endif %}>да</option>
+      </select>
+    </label>
+  </div>
+  <button type="submit">Фильтр</button>
+  <a class="btn-link" href="/admin/events/lifecycle">Сброс</a>
+</form>
+
+<div class="card table-scroll">
+  <p class="hint">Всего: {{ page.total }}</p>
+  <table class="data-table compact">
+    <thead>
+      <tr>
+        <th>Preview</th>
+        <th>Source</th>
+        <th>Created</th>
+        <th>1st show</th>
+        <th>1st rating</th>
+        <th>Views</th>
+        <th>Skip%</th>
+        <th>Ratings</th>
+        <th>h→show</th>
+        <th>h→rating</th>
+        <th>Dispute</th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for r in rows %}
+      <tr class="{% if highlight_id and highlight_id == r.event_id|string %}row-highlight{% endif %}">
+        <td><a href="/admin/events/{{ r.event_id }}">{{ r.preview }}</a></td>
+        <td>{{ r.source }}</td>
+        <td>{{ r.created_at.strftime('%m-%d') }}</td>
+        <td>{{ r.first_shown_at.strftime('%m-%d %H:%M') if r.first_shown_at else '—' }}</td>
+        <td>{{ r.first_rated_at.strftime('%m-%d %H:%M') if r.first_rated_at else '—' }}</td>
+        <td>{{ r.impressions_count }}</td>
+        <td>{% if r.skip_rate is not none %}{{ (r.skip_rate * 100) | round(0) }}%{% else %}—{% endif %}</td>
+        <td>{{ r.ratings_total }} <span class="hint">({{ r.ratings_community }}c)</span></td>
+        <td>{{ r.hours_to_first_show if r.hours_to_first_show is not none else '—' }}</td>
+        <td>{{ r.hours_to_first_rating if r.hours_to_first_rating is not none else '—' }}</td>
+        <td>{{ r.dispute_delta | round(1) if r.dispute_delta is not none else '—' }}</td>
+      </tr>
+      {% else %}
+      <tr><td colspan="11" class="hint">Нет событий по фильтру</td></tr>
+      {% endfor %}
+    </tbody>
+  </table>
+  {{ pagination_bar(page, '/admin/events/lifecycle', filter_query) }}
+</div>
+{% endblock %}

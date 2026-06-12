@@ -1,4 +1,5 @@
 import logging
+from typing import TYPE_CHECKING
 from uuid import UUID
 
 from aiogram import Bot
@@ -12,6 +13,9 @@ logger = logging.getLogger(__name__)
 
 NEW_RATINGS_DEBOUNCE_HOURS = 1
 
+if TYPE_CHECKING:
+    from app.services.analytics_service import AnalyticsService
+
 
 class NotificationService:
     def __init__(
@@ -20,11 +24,13 @@ class NotificationService:
         users_repo: UsersRepository,
         events_repo: EventsRepository,
         bot: Bot,
+        analytics_service: "AnalyticsService | None" = None,
     ) -> None:
         self._notifications = notifications_repo
         self._users = users_repo
         self._events = events_repo
         self._bot = bot
+        self._analytics = analytics_service
 
     async def on_event_rated(self, event_id: UUID) -> None:
         meta = await self._events.get_notification_meta(event_id)
@@ -76,6 +82,14 @@ class NotificationService:
         notification_id = await self._notifications.create(
             user_id, event_id, notification_type, body
         )
+        if self._analytics:
+            await self._analytics.track(
+                "notification_created",
+                user_id,
+                notification_id=str(notification_id),
+                notification_type=notification_type,
+                event_id=str(event_id) if event_id else None,
+            )
         await self._try_send(user_id, body, notification_id)
 
     async def _try_send(self, user_id: UUID, body: str, notification_id: UUID) -> None:
@@ -86,9 +100,22 @@ class NotificationService:
         try:
             await self._bot.send_message(user.telegram_id, body)
             await self._notifications.mark_sent(notification_id)
-        except Exception:
+            if self._analytics:
+                await self._analytics.track(
+                    "notification_sent",
+                    user_id,
+                    notification_id=str(notification_id),
+                )
+        except Exception as exc:
             logger.exception(
                 "Failed to send notification %s to user %s",
                 notification_id,
                 user_id,
             )
+            if self._analytics:
+                await self._analytics.track(
+                    "notification_failed",
+                    user_id,
+                    notification_id=str(notification_id),
+                    error=str(exc),
+                )

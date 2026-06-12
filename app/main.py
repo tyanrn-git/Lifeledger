@@ -5,10 +5,12 @@ from aiogram import Bot, Dispatcher
 from aiohttp import web
 from aiogram.webhook.aiohttp_server import SimpleRequestHandler
 
+from app.admin import setup_admin_routes
 from app.bot.dispatcher import setup_dispatcher
 from app.config import settings
 from app.db.connection import close_pool, init_pool
 from app.db.migrate import run_migrations
+from app.db.repositories.admin_event_log import AdminEventLogRepository
 from app.db.repositories.batches import BatchesRepository
 from app.db.repositories.events import EventsRepository
 from app.db.repositories.friendships import FriendshipsRepository
@@ -22,6 +24,7 @@ from app.logging_config import setup_logging
 from app.services.ai.factory import build_ai_provider
 from app.services.ai_generation_service import AIGenerationService
 from app.services.ai_service import AIService
+from app.services.analytics_service import AnalyticsService
 from app.services.event_service import EventService
 from app.services.feed_service import FeedService
 from app.services.friendship_service import FriendshipService
@@ -45,36 +48,76 @@ def build_services(pool, bot_username: str, bot: Bot, *, ai_service: AIService |
     batches_repo = BatchesRepository(pool)
     stats_repo = StatsRepository(pool)
     notifications_repo = NotificationsRepository(pool)
+    analytics_service = AnalyticsService(AdminEventLogRepository(pool))
 
     if ai_service is None:
         ai_service = AIService(build_ai_provider())
-    ai_generation_service = AIGenerationService(pool, events_repo, ai_service)
+    ai_generation_service = AIGenerationService(
+        pool, events_repo, ai_service, analytics_service
+    )
     feed_service = FeedService(
         events_repo,
         impressions_repo,
         batches_repo,
         friendships_repo,
         ai_generation_service,
+        analytics_service,
     )
 
     return {
         "user_service": UserService(users_repo),
-        "event_service": EventService(events_repo, ai_service, feed_service),
+        "event_service": EventService(
+            events_repo, ai_service, feed_service, analytics_service
+        ),
         "feed_service": feed_service,
         "rating_service": RatingService(
-            pool, ratings_repo, impressions_repo, events_repo, friendships_repo
+            pool,
+            ratings_repo,
+            impressions_repo,
+            events_repo,
+            friendships_repo,
+            analytics_service,
         ),
         "translation_service": TranslationService(pool, translations_repo, ai_service),
-        "friendship_service": FriendshipService(friendships_repo, users_repo, bot_username),
+        "friendship_service": FriendshipService(
+            friendships_repo, users_repo, bot_username, analytics_service
+        ),
         "stats_service": StatsService(stats_repo),
         "notification_service": NotificationService(
-            notifications_repo, users_repo, events_repo, bot
+            notifications_repo, users_repo, events_repo, bot, analytics_service
         ),
+        "analytics_service": analytics_service,
         "impressions_repo": impressions_repo,
     }
 
 
-async def bootstrap() -> tuple[Bot, Dispatcher]:
+def create_http_app(
+    pool,
+    *,
+    bot: Bot | None = None,
+    dp: Dispatcher | None = None,
+) -> web.Application:
+    app = web.Application()
+
+    async def health(_request: web.Request) -> web.Response:
+        return web.Response(text="ok")
+
+    app.router.add_get("/health", health)
+    app.router.add_get("/", health)
+
+    if bot is not None and dp is not None:
+        webhook_handler = SimpleRequestHandler(
+            dispatcher=dp,
+            bot=bot,
+            secret_token=settings.webhook_secret or None,
+        )
+        webhook_handler.register(app, path=settings.webhook_path)
+
+    setup_admin_routes(app, pool)
+    return app
+
+
+async def bootstrap() -> tuple[Bot, Dispatcher, object, dict]:
     setup_logging()
     pool = await init_pool()
     await run_migrations(pool)
@@ -90,16 +133,24 @@ async def bootstrap() -> tuple[Bot, Dispatcher]:
 
     services = build_services(pool, bot_username, bot, ai_service=ai_service)
     dp = setup_dispatcher(services)
-    return bot, dp
+    return bot, dp, pool, services
 
 
 async def run_polling() -> None:
-    bot, dp = await bootstrap()
+    bot, dp, pool, _services = await bootstrap()
+    app = create_http_app(pool)
+    runner = web.AppRunner(app)
+    await runner.setup()
+    site = web.TCPSite(runner, host="0.0.0.0", port=settings.port)
+    await site.start()
+    logger.info("Admin HTTP on 0.0.0.0:%s (polling mode)", settings.port)
+
     try:
         await bot.delete_webhook(drop_pending_updates=False)
         logger.info("LifeLedger bot started (polling)")
         await dp.start_polling(bot)
     finally:
+        await runner.cleanup()
         await close_pool()
 
 
@@ -110,21 +161,8 @@ async def run_webhook() -> None:
             "WEBHOOK_URL or RAILWAY_PUBLIC_DOMAIN must be set when BOT_MODE=webhook"
         )
 
-    bot, dp = await bootstrap()
-    app = web.Application()
-
-    webhook_handler = SimpleRequestHandler(
-        dispatcher=dp,
-        bot=bot,
-        secret_token=settings.webhook_secret or None,
-    )
-    webhook_handler.register(app, path=settings.webhook_path)
-
-    async def health(_request: web.Request) -> web.Response:
-        return web.Response(text="ok")
-
-    app.router.add_get("/health", health)
-    app.router.add_get("/", health)
+    bot, dp, pool, _services = await bootstrap()
+    app = create_http_app(pool, bot=bot, dp=dp)
 
     async def on_shutdown(_app: web.Application) -> None:
         await bot.delete_webhook()

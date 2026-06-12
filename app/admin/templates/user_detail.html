@@ -1,0 +1,103 @@
+{% extends "base.html" %}
+{% block title %}User — LifeLedger Admin{% endblock %}
+{% block content %}
+<p><a href="/admin/users">← Users</a></p>
+<h1>{{ display_name(user.username, user.first_name, user.last_name) }}</h1>
+
+<div class="two-col">
+  <div class="card">
+    <h2>Профиль</h2>
+    <table class="data-table compact">
+      <tr><th>ID</th><td class="mono">{{ user.id }}</td></tr>
+      <tr><th>Telegram ID</th><td>{{ user.telegram_id }}</td></tr>
+      <tr><th>Username</th><td>{% if user.username %}@{{ user.username }}{% else %}—{% endif %}</td></tr>
+      <tr><th>Язык</th><td>{{ user.language_code }}</td></tr>
+      <tr><th>Уведомления</th><td>{{ 'вкл' if user.notifications_enabled else 'выкл' }}</td></tr>
+      <tr><th>Регистрация</th><td>{{ user.created_at.strftime('%Y-%m-%d %H:%M') }}</td></tr>
+      <tr><th>Last seen</th><td>{{ user.last_seen_at.strftime('%Y-%m-%d %H:%M') if user.last_seen_at else '—' }}</td></tr>
+    </table>
+  </div>
+
+  <div class="card">
+    <h2>Статистика</h2>
+    <table class="data-table compact">
+      <tr><th>События автора (real)</th><td>{{ user.author_events_count }}</td></tr>
+      <tr><th>Оценок поставил</th><td>{{ user.rated_events_count }}</td></tr>
+      <tr><th>Средняя оценка</th><td>{{ user.user_average if user.user_average is not none else '—' }}</td></tr>
+      <tr><th>Средний community score</th><td>{{ user.community_average if user.community_average is not none else '—' }}</td></tr>
+      <tr><th>Друзей</th><td>{{ user.friends | length }}</td></tr>
+    </table>
+  </div>
+</div>
+
+<div class="card">
+  <h2>Друзья</h2>
+  {% if user.friends %}
+  <ul class="plain-list">
+    {% for f in user.friends %}
+    <li><a href="/admin/users/{{ f.id }}">{{ display_name(f.username, f.first_name, f.last_name) }}</a></li>
+    {% endfor %}
+  </ul>
+  {% else %}
+  <p class="hint">Нет друзей</p>
+  {% endif %}
+</div>
+
+<div class="card">
+  <h2>События автора</h2>
+  <table class="data-table">
+    <thead><tr><th>Текст</th><th>Тип</th><th>Source</th><th>Score</th><th>Дата</th></tr></thead>
+    <tbody>
+      {% for e in user.events %}
+      <tr>
+        <td><a href="/admin/events/{{ e.id }}">{{ e.normalized_text }}</a></td>
+        <td>{{ e.event_type }}</td>
+        <td>{{ e.source }}</td>
+        <td>{{ e.final_community_score if e.final_community_score is not none else '—' }}</td>
+        <td>{{ e.created_at.strftime('%Y-%m-%d') }}</td>
+      </tr>
+      {% else %}
+      <tr><td colspan="5" class="hint">Нет событий</td></tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</div>
+
+<div class="card">
+  <h2>Батчи ленты</h2>
+  <table class="data-table compact">
+    <thead><tr><th>Создан</th><th>Завершён</th><th>Requested</th><th>Actual</th></tr></thead>
+    <tbody>
+      {% for b in user.batches %}
+      <tr>
+        <td>{{ b.created_at.strftime('%Y-%m-%d %H:%M') }}</td>
+        <td>{{ b.completed_at.strftime('%Y-%m-%d %H:%M') if b.completed_at else 'активен' }}</td>
+        <td>{{ b.requested_size }}</td>
+        <td>{{ b.actual_size }}</td>
+      </tr>
+      {% else %}
+      <tr><td colspan="4" class="hint">Нет батчей</td></tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</div>
+
+<div class="card">
+  <h2>Timeline (admin_event_log, 100)</h2>
+  <p class="hint"><a href="/admin/activity?user_id={{ user.id }}">Все действия пользователя</a> — полный журнал с фильтрами.</p>
+  <table class="data-table compact">
+    <thead><tr><th>Время</th><th>Событие</th><th>Payload</th></tr></thead>
+    <tbody>
+      {% for t in user.timeline %}
+      <tr>
+        <td>{{ t.created_at.strftime('%m-%d %H:%M:%S') }}</td>
+        <td><code>{{ t.event_name }}</code></td>
+        <td class="mono">{{ t.properties }}</td>
+      </tr>
+      {% else %}
+      <tr><td colspan="3" class="hint">Нет записей</td></tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</div>
+{% endblock %}

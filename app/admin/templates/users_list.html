@@ -1,0 +1,66 @@
+{% extends "base.html" %}
+{% from "_pagination.html" import pagination_bar %}
+{% block title %}Users — LifeLedger Admin{% endblock %}
+{% block content %}
+<h1>Users</h1>
+<p class="hint">Всего: {{ page.total }}</p>
+
+<form class="filters card" method="get" action="/admin/users">
+  <div class="filter-grid">
+    <label>Рег. от <input type="date" name="reg_from" value="{{ filters.reg_from or '' }}"></label>
+    <label>Рег. до <input type="date" name="reg_to" value="{{ filters.reg_to or '' }}"></label>
+    <label>Язык <input type="text" name="language" value="{{ filters.language or '' }}" placeholder="ru"></label>
+    <label>Есть события
+      <select name="has_events">
+        <option value="">—</option>
+        <option value="yes" {% if filters.has_events == 'yes' %}selected{% endif %}>да</option>
+        <option value="no" {% if filters.has_events == 'no' %}selected{% endif %}>нет</option>
+      </select>
+    </label>
+    <label>Есть оценки
+      <select name="has_ratings">
+        <option value="">—</option>
+        <option value="yes" {% if filters.has_ratings == 'yes' %}selected{% endif %}>да</option>
+        <option value="no" {% if filters.has_ratings == 'no' %}selected{% endif %}>нет</option>
+      </select>
+    </label>
+    <label>Активен N дней <input type="number" name="active_days" min="1" value="{{ filters.active_days or '' }}"></label>
+  </div>
+  <button type="submit">Фильтр</button>
+  <a class="btn-link" href="/admin/users">Сброс</a>
+</form>
+
+<div class="card">
+  <table class="data-table">
+    <thead>
+      <tr>
+        <th>Имя</th>
+        <th>Username</th>
+        <th>Язык</th>
+        <th>Регистрация</th>
+        <th>Last seen</th>
+        <th>События</th>
+        <th>Оценки</th>
+        <th>Друзья</th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for u in users %}
+      <tr>
+        <td><a href="/admin/users/{{ u.id }}">{{ display_name(u.username, u.first_name, u.last_name) }}</a></td>
+        <td>{% if u.username %}@{{ u.username }}{% else %}—{% endif %}</td>
+        <td>{{ u.language_code }}</td>
+        <td>{{ u.created_at.strftime('%Y-%m-%d %H:%M') }}</td>
+        <td>{{ u.last_seen_at.strftime('%Y-%m-%d %H:%M') if u.last_seen_at else '—' }}</td>
+        <td>{{ u.events_count }}</td>
+        <td>{{ u.ratings_count }}</td>
+        <td>{{ u.friends_count }}</td>
+      </tr>
+      {% else %}
+      <tr><td colspan="8" class="hint">Нет пользователей</td></tr>
+      {% endfor %}
+    </tbody>
+  </table>
+  {{ pagination_bar(page, '/admin/users', filter_query) }}
+</div>
+{% endblock %}

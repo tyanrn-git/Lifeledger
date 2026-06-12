@@ -27,6 +27,8 @@ python -c "import secrets; print(secrets.token_urlsafe(32))"
 | `TELEGRAM_BOT_TOKEN` | токен бота |
 | `DATABASE_URL` | строка Supabase PostgreSQL |
 | `OPENAI_API_KEY` | ключ OpenAI |
+| `ADMIN_PASSWORD` | пароль веб-админки (`/admin`); если пусто — админка отключена |
+| `ADMIN_SESSION_TTL_HOURS` | опционально, default `24` |
 | `WEBHOOK_SECRET` | случайная строка (см. выше) |
 | `AI_PROVIDER` | `openai` |
 | `DEFAULT_LANGUAGE` | `en` |
@@ -59,3 +61,27 @@ python -m app.main
 ```
 
 Не запускайте polling и webhook с одним токеном одновременно.
+
+## 7. Автоперезапуск
+
+### Локально
+
+```bash
+bash scripts/start_bot_local.sh    # поднять, если не запущен
+bash scripts/restart_bot_local.sh  # полный перезапуск после правок кода
+bash scripts/bot_status.sh         # проверить /health
+```
+
+Лог: `.cursor/bot.log`. Cursor-хуки перезапускают бота после правок в `app/` в конце сессии агента.
+
+### Railway
+
+Push в GitHub → Railway собирает образ и поднимает новый контейнер (healthcheck `/health`).
+
+После push дождаться готовности:
+
+```bash
+bash scripts/wait_railway_deploy.sh
+```
+
+Опционально в `.env` для скрипта: `RAILWAY_PUBLIC_DOMAIN=your-app.up.railway.app`

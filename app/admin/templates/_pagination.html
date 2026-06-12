@@ -1,0 +1,14 @@
+{% macro pagination_bar(page, base_path, filter_query) %}
+{% if page.total_pages > 1 %}
+<nav class="pagination">
+  {% set sep = '?' ~ filter_query ~ '&' if filter_query else '?' %}
+  {% if page.has_prev %}
+  <a href="{{ base_path }}{{ sep }}page={{ page.page - 1 }}">← Prev</a>
+  {% endif %}
+  <span class="hint">Стр. {{ page.page }} / {{ page.total_pages }} ({{ page.total }})</span>
+  {% if page.has_next %}
+  <a href="{{ base_path }}{{ sep }}page={{ page.page + 1 }}">Next →</a>
+  {% endif %}
+</nav>
+{% endif %}
+{% endmacro %}

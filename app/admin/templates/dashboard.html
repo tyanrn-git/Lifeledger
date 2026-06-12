@@ -1,0 +1,111 @@
+{% extends "base.html" %}
+{% block title %}Dashboard — LifeLedger Admin{% endblock %}
+{% block content %}
+<h1>Dashboard</h1>
+
+<div class="period-tabs">
+  <a href="/admin/dashboard?days=7" class="{% if period == '7' %}active{% endif %}">7 дн.</a>
+  <a href="/admin/dashboard?days=30" class="{% if period == '30' %}active{% endif %}">30 дн.</a>
+  <a href="/admin/dashboard?days=90" class="{% if period == '90' %}active{% endif %}">90 дн.</a>
+  <a href="/admin/dashboard?days=all" class="{% if period == 'all' %}active{% endif %}">All</a>
+</div>
+
+<div class="kpi-grid">
+  <div class="kpi"><span class="kpi-label">Users</span><span class="kpi-value">{{ kpis.users_total }}</span></div>
+  <div class="kpi"><span class="kpi-label">New today</span><span class="kpi-value">{{ kpis.new_users_today }}</span></div>
+  <div class="kpi"><span class="kpi-label">New 7d</span><span class="kpi-value">{{ kpis.new_users_7d }}</span></div>
+  <div class="kpi"><span class="kpi-label">Active today</span><span class="kpi-value">{{ kpis.active_users_today }}</span></div>
+  <div class="kpi"><span class="kpi-label">Active 7d</span><span class="kpi-value">{{ kpis.active_users_7d }}</span></div>
+  <div class="kpi"><span class="kpi-label">Events</span><span class="kpi-value">{{ kpis.events_total }}</span></div>
+  <div class="kpi"><span class="kpi-label">Events today</span><span class="kpi-value">{{ kpis.events_today }}</span></div>
+  <div class="kpi"><span class="kpi-label">Ratings</span><span class="kpi-value">{{ kpis.ratings_total }}</span></div>
+  <div class="kpi"><span class="kpi-label">Ratings today</span><span class="kpi-value">{{ kpis.ratings_today }}</span></div>
+  <div class="kpi"><span class="kpi-label">AI events</span><span class="kpi-value">{{ kpis.ai_events_total }}</span></div>
+  <div class="kpi"><span class="kpi-label">Avg community ratings / event</span><span class="kpi-value">{{ kpis.avg_community_ratings | default('—', true) }}</span></div>
+  <div class="kpi"><span class="kpi-label">Avg batch size</span><span class="kpi-value">{{ kpis.avg_batch_size | default('—', true) }}</span></div>
+  <div class="kpi"><span class="kpi-label">Empty feed (7d)</span><span class="kpi-value">{{ kpis.empty_feed_starts_7d }}</span></div>
+  <div class="kpi"><span class="kpi-label">AI gen triggers (7d)</span><span class="kpi-value">{{ kpis.ai_generation_triggers_7d }}</span></div>
+  <div class="kpi"><span class="kpi-label">Pending AI rescore</span><span class="kpi-value">{{ kpis.pending_ai_rescore }}</span></div>
+  <div class="kpi"><span class="kpi-label">Events no views 24h+</span><span class="kpi-value">{{ kpis.events_no_impressions_24h }}</span></div>
+  <div class="kpi"><span class="kpi-label">Median h→1st rating</span><span class="kpi-value">{{ lifecycle_kpis.median_hours_to_first_rating | default('—', true) }}</span></div>
+  <div class="kpi"><span class="kpi-label">Median skip rate</span><span class="kpi-value">{% if lifecycle_kpis.median_skip_rate is not none %}{{ (lifecycle_kpis.median_skip_rate * 100) | round(0) }}%{% else %}—{% endif %}</span></div>
+</div>
+
+<div class="charts">
+  <div class="card chart-card"><h3>Новые пользователи</h3><canvas id="chartNewUsers"></canvas></div>
+  <div class="card chart-card"><h3>Активные пользователи</h3><canvas id="chartActiveUsers"></canvas></div>
+  <div class="card chart-card"><h3>События</h3><canvas id="chartEvents"></canvas></div>
+  <div class="card chart-card"><h3>Оценки</h3><canvas id="chartRatings"></canvas></div>
+  <div class="card chart-card"><h3>AI generation</h3><canvas id="chartAi"></canvas></div>
+  <div class="card chart-card"><h3>Empty feed</h3><canvas id="chartFeedEmpty"></canvas></div>
+</div>
+
+<div class="two-col">
+  <div class="card">
+    <h2>Журнал событий (7 дней)</h2>
+    <p class="hint">Что пишется в <code>admin_event_log</code> при действиях в боте.</p>
+    <table class="data-table">
+      <thead><tr><th>event_name</th><th>count</th></tr></thead>
+      <tbody>
+        {% for row in log_counts %}
+        <tr><td><code>{{ row.event_name }}</code></td><td>{{ row.count }}</td></tr>
+        {% else %}
+        <tr><td colspan="2">Пока нет записей</td></tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+
+  <div class="card">
+    <h2>Последние записи</h2>
+    <table class="data-table compact">
+      <thead><tr><th>time</th><th>event</th><th>user</th></tr></thead>
+      <tbody>
+        {% for row in recent_logs %}
+        <tr>
+          <td>{{ row.created_at.strftime('%m-%d %H:%M') }}</td>
+          <td><code>{{ row.event_name }}</code></td>
+          <td class="mono">{{ row.user_id[:8] if row.user_id else '—' }}…</td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</div>
+
+<div class="card">
+  <h2>Ops</h2>
+  <p><a href="/health" target="_blank">/health</a></p>
+  <h3>Последние ai_generation_failed</h3>
+  {% if ops.ai_generation_failed %}
+  <ul>{% for r in ops.ai_generation_failed %}<li><code>{{ r.created_at }}</code> {{ r.properties }}</li>{% endfor %}</ul>
+  {% else %}<p class="hint">Нет</p>{% endif %}
+  <h3>Последние notification_failed</h3>
+  {% if ops.notification_failed %}
+  <ul>{% for r in ops.notification_failed %}<li><code>{{ r.created_at }}</code> {{ r.properties }}</li>{% endfor %}</ul>
+  {% else %}<p class="hint">Нет</p>{% endif %}
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
+<script>
+const chartData = {{ chart_json | safe }};
+function lineChart(canvasId, key, label) {
+  const el = document.getElementById(canvasId);
+  if (!el || !chartData[key]) return;
+  new Chart(el, {
+    type: 'line',
+    data: {
+      labels: chartData[key].map(p => p.day),
+      datasets: [{ label, data: chartData[key].map(p => p.value), tension: 0.2 }]
+    },
+    options: { responsive: true, plugins: { legend: { display: false } } }
+  });
+}
+lineChart('chartNewUsers', 'new_users', 'New users');
+lineChart('chartActiveUsers', 'active_users', 'Active');
+lineChart('chartEvents', 'events', 'Events');
+lineChart('chartRatings', 'ratings', 'Ratings');
+lineChart('chartAi', 'ai_generated', 'AI');
+lineChart('chartFeedEmpty', 'feed_empty', 'Empty feed');
+</script>
+{% endblock %}

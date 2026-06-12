@@ -1,0 +1,31 @@
+{% extends "base.html" %}
+{% block title %}Funnels — LifeLedger Admin{% endblock %}
+{% block content %}
+<h1>Воронка</h1>
+<p class="hint">По пользователям с момента включения журнала. Registration = все пользователи в БД.</p>
+
+<div class="card">
+  <table class="data-table">
+    <thead>
+      <tr>
+        <th>#</th>
+        <th>Шаг</th>
+        <th>Users</th>
+        <th>% от Registration</th>
+        <th>% от пред. шага</th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for step in steps %}
+      <tr>
+        <td>{{ step.number }}</td>
+        <td>{{ step.label }}</td>
+        <td><strong>{{ step.count }}</strong></td>
+        <td>{{ step.pct_registration }}%</td>
+        <td>{% if step.number == 1 %}—{% else %}{{ step.pct_previous }}%{% endif %}</td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</div>
+{% endblock %}

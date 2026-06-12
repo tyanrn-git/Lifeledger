@@ -1,0 +1,87 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+  <meta charset="utf-8">
+  <meta name="robots" content="noindex, nofollow">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>{% block title %}LifeLedger Admin{% endblock %}</title>
+  <style>
+    body { font-family: system-ui, sans-serif; margin: 0; background: #f4f5f7; color: #1a1a1a; }
+    header { background: #1e293b; color: #fff; padding: 12px 20px; }
+    header a { color: #cbd5e1; margin-left: 16px; text-decoration: none; }
+    header a:hover { color: #fff; }
+    .layout { display: flex; min-height: calc(100vh - 48px); }
+    nav { width: 200px; background: #fff; border-right: 1px solid #e2e8f0; padding: 16px 0; flex-shrink: 0; font-size: 0.9rem; }
+    nav a { display: block; padding: 8px 20px; color: #334155; text-decoration: none; }
+    nav a.active { background: #e2e8f0; font-weight: 600; }
+    nav a.disabled { color: #94a3b8; pointer-events: none; }
+    main { flex: 1; padding: 24px; max-width: 1200px; }
+    main.standalone { max-width: 400px; margin: 80px auto; }
+    .card { background: #fff; border-radius: 8px; padding: 20px; box-shadow: 0 1px 3px rgba(0,0,0,.08); margin-bottom: 20px; }
+    .error { color: #b91c1c; margin-bottom: 12px; }
+    label { display: block; margin-bottom: 8px; font-weight: 500; }
+    input[type=password] { width: 100%; max-width: 320px; padding: 8px; }
+    button { margin-top: 12px; padding: 8px 16px; cursor: pointer; }
+    h1 { margin-top: 0; }
+    .hint { color: #64748b; font-size: 0.9rem; }
+    .period-tabs { margin-bottom: 16px; }
+    .period-tabs a { margin-right: 8px; padding: 6px 12px; background: #fff; border-radius: 6px; text-decoration: none; color: #334155; border: 1px solid #e2e8f0; }
+    .period-tabs a.active { background: #1e293b; color: #fff; border-color: #1e293b; }
+    .kpi-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(160px, 1fr)); gap: 12px; margin-bottom: 24px; }
+    .kpi { background: #fff; border-radius: 8px; padding: 12px; box-shadow: 0 1px 3px rgba(0,0,0,.08); }
+    .kpi-label { display: block; font-size: 0.75rem; color: #64748b; margin-bottom: 4px; }
+    .kpi-value { font-size: 1.25rem; font-weight: 600; }
+    .charts { display: grid; grid-template-columns: repeat(auto-fill, minmax(320px, 1fr)); gap: 16px; margin-bottom: 24px; }
+    .chart-card h3 { margin-top: 0; font-size: 0.95rem; }
+    .two-col { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
+    @media (max-width: 900px) { .two-col { grid-template-columns: 1fr; } }
+    .data-table { width: 100%; border-collapse: collapse; font-size: 0.9rem; }
+    .data-table th, .data-table td { text-align: left; padding: 8px; border-bottom: 1px solid #e2e8f0; }
+    .data-table.compact td { font-size: 0.8rem; }
+    .mono { font-family: ui-monospace, monospace; font-size: 0.8rem; }
+    code { font-size: 0.85em; }
+    .filter-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(180px, 1fr)); gap: 12px; margin-bottom: 12px; }
+    .filter-grid label { font-size: 0.85rem; font-weight: 400; }
+    .filter-grid input, .filter-grid select { display: block; width: 100%; margin-top: 4px; padding: 6px; box-sizing: border-box; }
+    .filters button { margin-top: 0; margin-right: 8px; }
+    .btn-link { font-size: 0.9rem; color: #2563eb; text-decoration: none; }
+    .pagination { margin-top: 16px; display: flex; gap: 16px; align-items: center; }
+    .plain-list { margin: 0; padding-left: 20px; }
+    .table-scroll { overflow-x: auto; }
+    tr.row-highlight { background: #fef3c7; }
+    .flash { background: #dcfce7; color: #166534; padding: 10px 14px; border-radius: 6px; margin-bottom: 16px; }
+    .btn-danger { background: #b91c1c; color: #fff; border: none; border-radius: 6px; }
+    .btn-secondary { background: #475569; color: #fff; border: none; border-radius: 6px; }
+    .mod-form { display: flex; flex-wrap: wrap; gap: 12px; align-items: flex-end; }
+    .mod-form input[type=text] { min-width: 240px; padding: 6px; }
+  </style>
+</head>
+<body>
+  {% if show_nav %}
+  <header>
+    <strong>LifeLedger Admin</strong>
+    <a href="/admin/logout">Выйти</a>
+  </header>
+  <div class="layout">
+    <nav>
+      <a href="/admin" class="{% if active == 'home' %}active{% endif %}">Home</a>
+      <a href="/admin/dashboard" class="{% if active == 'dashboard' %}active{% endif %}">Dashboard</a>
+      <a href="/admin/funnels" class="{% if active == 'funnels' %}active{% endif %}">Funnels</a>
+      <a href="/admin/users" class="{% if active == 'users' %}active{% endif %}">Users</a>
+      <a href="/admin/activity" class="{% if active == 'activity' %}active{% endif %}">Activity</a>
+      <a href="/admin/events" class="{% if active == 'events' %}active{% endif %}">Events</a>
+      <a href="/admin/events/lifecycle" class="{% if active == 'lifecycle' %}active{% endif %}">Lifecycle</a>
+      <a href="/admin/ratings" class="{% if active == 'ratings' %}active{% endif %}">Ratings</a>
+      <a href="/admin/feed" class="{% if active == 'feed' %}active{% endif %}">Feed</a>
+      <a href="/admin/ai" class="{% if active == 'ai' %}active{% endif %}">AI</a>
+      <a href="/admin/notifications" class="{% if active == 'notifications' %}active{% endif %}">Notifications</a>
+      <a href="/admin/export" class="{% if active == 'export' %}active{% endif %}">Export</a>
+      <a href="/admin/system" class="{% if active == 'system' %}active{% endif %}">System</a>
+    </nav>
+  {% endif %}
+    <main class="{% if not show_nav %}standalone{% endif %}">{% block content %}{% endblock %}</main>
+  {% if show_nav %}
+  </div>
+  {% endif %}
+</body>
+</html>

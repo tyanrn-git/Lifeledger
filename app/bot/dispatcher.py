@@ -8,7 +8,12 @@ from app.bot.middlewares import ServicesMiddleware, UserContextMiddleware
 def setup_dispatcher(services: dict) -> Dispatcher:
     dp = Dispatcher(storage=MemoryStorage())
     dp.update.middleware(ServicesMiddleware(services))
-    dp.update.middleware(UserContextMiddleware(services["user_service"]))
+    dp.update.middleware(
+        UserContextMiddleware(
+            services["user_service"],
+            services.get("analytics_service"),
+        )
+    )
 
     for router in get_routers():
         dp.include_router(router)

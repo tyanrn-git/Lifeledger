@@ -1,3 +1,4 @@
+from typing import TYPE_CHECKING
 from uuid import UUID
 
 import asyncpg
@@ -9,6 +10,9 @@ from app.db.repositories.ratings import RatingsRepository
 from app.schemas.events import EventForRating
 from app.utils.scoring import build_community_score_breakdown
 
+if TYPE_CHECKING:
+    from app.services.analytics_service import AnalyticsService
+
 
 class RatingService:
     def __init__(
@@ -18,12 +22,14 @@ class RatingService:
         impressions_repo: ImpressionsRepository,
         events_repo: EventsRepository,
         friendships_repo: FriendshipsRepository,
+        analytics_service: "AnalyticsService | None" = None,
     ) -> None:
         self._pool = pool
         self._ratings = ratings_repo
         self._impressions = impressions_repo
         self._events = events_repo
         self._friendships = friendships_repo
+        self._analytics = analytics_service
 
     async def rate_event(self, user_id: UUID, event_id: UUID, score: int) -> EventForRating:
         if not (-10 <= score <= 10):
@@ -84,13 +90,30 @@ class RatingService:
                 )
                 await self._recalculate_event_scores(event_id, conn)
 
+        if self._analytics:
+            await self._analytics.track(
+                "event_rated",
+                user_id,
+                event_id=str(event_id),
+                score=score,
+                rating_scope=rating_scope,
+            )
+
         event = await self._events.get_for_rating(event_id)
         if not event:
             raise LookupError("event_not_found")
         return event
 
     async def skip_event(self, user_id: UUID, event_id: UUID) -> None:
+        batch_id, feed_tier = await self._impressions.get_impression_meta(user_id, event_id)
         await self._impressions.mark_skipped(user_id, event_id)
+        if self._analytics:
+            props: dict = {"event_id": str(event_id)}
+            if batch_id:
+                props["batch_id"] = str(batch_id)
+            if feed_tier is not None:
+                props["feed_tier"] = feed_tier
+            await self._analytics.track("event_skipped", user_id, **props)
 
     async def _recalculate_event_scores(self, event_id: UUID, conn: asyncpg.Connection) -> None:
         row = await conn.fetchrow(

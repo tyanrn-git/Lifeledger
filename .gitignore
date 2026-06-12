@@ -8,3 +8,7 @@ __pycache__/
 .mypy_cache/
 .ruff_cache/
 .DS_Store
+.cursor/bot.pid
+.cursor/bot.log
+.cursor/bot-restart.lock
+.cursor/.bot-restart-pending

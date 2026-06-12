@@ -1,0 +1,61 @@
+{% extends "base.html" %}
+{% block title %}AI — LifeLedger Admin{% endblock %}
+{% block content %}
+<h1>AI Analytics</h1>
+
+<div class="kpi-grid">
+  <div class="kpi"><span class="kpi-label">AI events total</span><span class="kpi-value">{{ summary.stats.ai_events_total }}</span></div>
+  <div class="kpi"><span class="kpi-label">AI events (7d)</span><span class="kpi-value">{{ summary.stats.ai_events_7d }}</span></div>
+  <div class="kpi"><span class="kpi-label">Gen triggers (7d)</span><span class="kpi-value">{{ summary.stats.triggers_7d }}</span></div>
+  <div class="kpi"><span class="kpi-label">Gen failed (7d)</span><span class="kpi-value">{{ summary.stats.failed_7d }}</span></div>
+  <div class="kpi"><span class="kpi-label">Pending rescore</span><span class="kpi-value">{{ summary.stats.pending_rescore }}</span></div>
+  <div class="kpi"><span class="kpi-label">Calibration v</span><span class="kpi-value">{{ summary.stats.calibration_version }}</span></div>
+</div>
+
+<div class="card chart-card">
+  <h2>AI events / day (30d)</h2>
+  <canvas id="aiChart" height="100"></canvas>
+</div>
+
+<div class="card">
+  <h2>Спорные события (|AI − community| ≥ 3, ratings ≥ 5)</h2>
+  <table class="data-table compact">
+    <thead>
+      <tr><th>Event</th><th>AI</th><th>Community</th><th>Final</th><th>Δ</th><th>Ratings</th><th>Calib</th></tr>
+    </thead>
+    <tbody>
+      {% for e in summary.disputed %}
+      <tr>
+        <td><a href="/admin/events/{{ e.event_id }}">{{ e.preview }}</a></td>
+        <td>{{ e.ai_score | default('—', true) }}</td>
+        <td>{{ e.community_user_score | default('—', true) }}</td>
+        <td>{{ e.final_community_score | default('—', true) }}</td>
+        <td>{{ e.dispute_delta | round(1) }}</td>
+        <td>{{ e.community_ratings_count }}</td>
+        <td>{{ e.scoring_calibration_version }}</td>
+      </tr>
+      {% else %}<tr><td colspan="7" class="hint">Нет спорных событий по порогу</td></tr>{% endfor %}
+    </tbody>
+  </table>
+</div>
+
+<div class="card">
+  <h2>Последние ai_generation_failed</h2>
+  {% if summary.recent_failures %}
+  <ul>{% for r in summary.recent_failures %}<li><code>{{ r.created_at.strftime('%m-%d %H:%M') }}</code> <span class="mono">{{ r.properties }}</span></li>{% endfor %}</ul>
+  {% else %}<p class="hint">Нет</p>{% endif %}
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
+<script>
+const data = {{ summary.ai_per_day_json | safe }};
+new Chart(document.getElementById('aiChart'), {
+  type: 'line',
+  data: {
+    labels: data.map(p => p.day),
+    datasets: [{ label: 'AI events', data: data.map(p => p.value), tension: 0.2 }]
+  },
+  options: { responsive: true, plugins: { legend: { display: false } } }
+});
+</script>
+{% endblock %}

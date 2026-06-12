@@ -1,5 +1,6 @@
 import logging
 from dataclasses import dataclass
+from typing import TYPE_CHECKING
 from uuid import UUID
 
 from app.config import settings
@@ -15,6 +16,9 @@ from app.utils.feed_priority import (
     FEED_TIER_USER,
     source_priority,
 )
+
+if TYPE_CHECKING:
+    from app.services.analytics_service import AnalyticsService
 
 logger = logging.getLogger(__name__)
 
@@ -35,12 +39,18 @@ class FeedService:
         batches_repo: BatchesRepository,
         friendships_repo: FriendshipsRepository,
         ai_generation_service: AIGenerationService | None = None,
+        analytics_service: "AnalyticsService | None" = None,
     ) -> None:
         self._events = events_repo
         self._impressions = impressions_repo
         self._batches = batches_repo
         self._friendships = friendships_repo
         self._ai_generation = ai_generation_service
+        self._analytics = analytics_service
+
+    async def _track(self, event_name: str, user_id: UUID, **properties) -> None:
+        if self._analytics:
+            await self._analytics.track(event_name, user_id, **properties)
 
     async def start_or_resume(self, user_id: UUID, *, force_new: bool = False) -> FeedStart:
         batch_id = None if force_new else await self._batches.get_active_batch(user_id)
@@ -52,16 +62,30 @@ class FeedService:
             if event_id:
                 event = await self._events.get_for_rating(event_id)
                 remaining = await self._batches.count_remaining(user_id, batch_id)
+                await self._track(
+                    "feed_started",
+                    user_id,
+                    batch_id=str(batch_id),
+                    is_new_batch=False,
+                    batch_size=remaining,
+                )
                 return FeedStart(batch_id, remaining, False, event)
+            await self._track(
+                "batch_completed",
+                user_id,
+                batch_id=str(batch_id),
+            )
             await self._batches.complete_batch(batch_id)
 
         candidates = await self._fetch_or_generate(user_id)
 
         if not candidates:
+            await self._track("feed_empty", user_id)
             return FeedStart(UUID(int=0), 0, False, None)
 
         event_ids = [c.id for c in candidates]
         priorities = [source_priority(c.feed_tier, c.created_at) for c in candidates]
+        feed_tiers = [c.feed_tier for c in candidates]
 
         batch_id = await self._batches.create_batch(
             user_id,
@@ -69,9 +93,36 @@ class FeedService:
             len(event_ids),
         )
         await self._impressions.create_batch_impressions(
-            user_id, batch_id, event_ids, priorities
+            user_id,
+            batch_id,
+            event_ids,
+            priorities,
+            feed_tiers,
         )
         is_new_batch = True
+
+        await self._track(
+            "batch_created",
+            user_id,
+            batch_id=str(batch_id),
+            requested_size=settings.batch_size,
+            actual_size=len(event_ids),
+        )
+        await self._track(
+            "feed_started",
+            user_id,
+            batch_id=str(batch_id),
+            is_new_batch=True,
+            batch_size=len(event_ids),
+        )
+        for event_id, tier in zip(event_ids, feed_tiers):
+            await self._track(
+                "event_shown",
+                user_id,
+                event_id=str(event_id),
+                batch_id=str(batch_id),
+                feed_tier=tier,
+            )
 
         event = await self._events.get_for_rating(event_ids[0])
         return FeedStart(batch_id, len(event_ids), is_new_batch, event)
@@ -126,9 +177,18 @@ class FeedService:
             return False
 
         priority = source_priority(feed_tier, meta.created_at)
-        return await self._impressions.inject_into_batch(
-            viewer_id, batch_id, event_id, priority
+        injected = await self._impressions.inject_into_batch(
+            viewer_id, batch_id, event_id, priority, feed_tier
         )
+        if injected:
+            await self._track(
+                "event_injected_into_batch",
+                viewer_id,
+                event_id=str(event_id),
+                batch_id=str(batch_id),
+                feed_tier=feed_tier,
+            )
+        return injected
 
     async def _sync_user_events_into_batch(self, user_id: UUID, batch_id: UUID) -> int:
         pending = await self._events.list_user_events_for_injection(
@@ -141,6 +201,7 @@ class FeedService:
                 batch_id,
                 candidate.id,
                 source_priority(candidate.feed_tier, candidate.created_at),
+                candidate.feed_tier,
             ):
                 synced += 1
         return synced
@@ -170,6 +231,11 @@ class FeedService:
         await self._sync_user_events_into_batch(user_id, batch_id)
         event_id = await self._impressions.get_next_shown(user_id, batch_id)
         if not event_id:
+            await self._track(
+                "batch_completed",
+                user_id,
+                batch_id=str(batch_id),
+            )
             await self._batches.complete_batch(batch_id)
             return None
         return await self._events.get_for_rating(event_id)

@@ -1,0 +1,155 @@
+{% extends "base.html" %}
+{% block title %}Event — LifeLedger Admin{% endblock %}
+{% block content %}
+<p><a href="/admin/events">← Events</a></p>
+<h1>Event</h1>
+
+{% if flash_msg %}
+<p class="flash">Событие {{ flash_msg }} из ленты.</p>
+{% endif %}
+
+<div class="card">
+  <h2>Moderation</h2>
+  {% if event.is_deleted %}
+  <p class="hint">Событие удалено — модерация ленты недоступна.</p>
+  {% elif event.is_feed_hidden %}
+  <form class="mod-form" method="post" action="/admin/events/{{ event.id }}/unhide"
+        onsubmit="return confirm('Показать событие в ленте снова?');">
+    <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+    <label>Комментарий (опционально)
+      <input type="text" name="comment" placeholder="причина">
+    </label>
+    <button type="submit" class="btn-secondary">Unhide from feed</button>
+  </form>
+  {% else %}
+  <form class="mod-form" method="post" action="/admin/events/{{ event.id }}/hide"
+        onsubmit="return confirm('Скрыть событие из ленты? Оно не попадёт в новые батчи.');">
+    <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+    <label>Комментарий (опционально)
+      <input type="text" name="comment" placeholder="причина">
+    </label>
+    <button type="submit" class="btn-danger">Hide from feed</button>
+  </form>
+  {% endif %}
+</div>
+
+<div class="card">
+  <h2>Текст</h2>
+  <p><strong>Original:</strong> {{ event.original_text }}</p>
+  <p><strong>Normalized:</strong> {{ event.normalized_text }}</p>
+  {% if event.action_text %}<p><strong>Action:</strong> {{ event.action_text }}</p>{% endif %}
+  {% if event.context_text %}<p><strong>Context:</strong> {{ event.context_text }}</p>{% endif %}
+  <p class="hint">
+    {{ event.source }} · {{ event.event_type }} · {{ event.category or 'no category' }} · {{ event.original_language }}
+    · created {{ event.created_at.strftime('%Y-%m-%d %H:%M') }}
+    {% if event.is_deleted %} · <strong>deleted</strong>{% endif %}
+    {% if event.is_feed_hidden %} · <strong>hidden from feed</strong>{% endif %}
+  </p>
+  {% if event.author_user_id %}
+  <p>Author: <a href="/admin/users/{{ event.author_user_id }}">{{ event.author_name or event.author_user_id }}</a></p>
+  {% endif %}
+</div>
+
+<div class="two-col">
+  <div class="card">
+    <h2>Scores</h2>
+    <table class="data-table compact">
+      <tr><th>Self</th><td>{{ event.self_score }}</td></tr>
+      <tr><th>AI</th><td>{{ event.ai_score if event.ai_score is not none else '—' }}</td></tr>
+      <tr><th>Community user</th><td>{{ event.community_user_score if event.community_user_score is not none else '—' }}</td></tr>
+      <tr><th>Final community</th><td>{{ event.final_community_score if event.final_community_score is not none else '—' }}</td></tr>
+      <tr><th>Friends</th><td>{{ event.friends_score if event.friends_score is not none else '—' }}</td></tr>
+      <tr><th>Community ratings</th><td>{{ event.community_ratings_count }}</td></tr>
+      <tr><th>Friend ratings</th><td>{{ event.friends_ratings_count }}</td></tr>
+    </table>
+  </div>
+  <div class="card">
+    <h2>Weights / calibration</h2>
+    <table class="data-table compact">
+      <tr><th>community_ai_weight</th><td>{{ event.community_ai_weight if event.community_ai_weight is not none else '—' }}</td></tr>
+      <tr><th>community_user_weight</th><td>{{ event.community_user_weight if event.community_user_weight is not none else '—' }}</td></tr>
+      <tr><th>scoring_calibration_version</th><td>{{ event.scoring_calibration_version }}</td></tr>
+      <tr><th>Impressions</th><td>{{ event.impressions_count }} (skips: {{ event.skips_count }})</td></tr>
+    </table>
+    <p class="hint">Lifecycle — <a href="/admin/events/lifecycle?event_id={{ event.id }}">аналитика жизненного цикла</a></p>
+  </div>
+</div>
+
+<div class="card">
+  <h2>Ratings ({{ event.ratings | length }})</h2>
+  <table class="data-table compact">
+    <thead><tr><th>Rater</th><th>Scope</th><th>Score</th><th>Date</th></tr></thead>
+    <tbody>
+      {% for r in event.ratings %}
+      <tr>
+        <td><a href="/admin/users/{{ r.rater_user_id }}" class="mono">{{ r.rater_user_id }}</a></td>
+        <td>{{ r.rating_scope }}</td>
+        <td>{{ r.score }}</td>
+        <td>{{ r.created_at.strftime('%Y-%m-%d %H:%M') }}</td>
+      </tr>
+      {% else %}
+      <tr><td colspan="4" class="hint">Нет оценок</td></tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</div>
+
+<div class="card">
+  <h2>Impressions (до 100)</h2>
+  <table class="data-table compact">
+    <thead><tr><th>User</th><th>Status</th><th>Tier</th><th>Shown</th><th>Rated/Skipped</th></tr></thead>
+    <tbody>
+      {% for i in event.impressions %}
+      <tr>
+        <td><a href="/admin/users/{{ i.user_id }}" class="mono">{{ i.user_id }}</a></td>
+        <td>{{ i.status }}</td>
+        <td>{{ i.feed_tier if i.feed_tier is not none else '—' }}</td>
+        <td>{{ i.shown_at.strftime('%m-%d %H:%M') }}</td>
+        <td>
+          {% if i.rated_at %}{{ i.rated_at.strftime('%m-%d %H:%M') }}{% endif %}
+          {% if i.skipped_at %}skip {{ i.skipped_at.strftime('%m-%d %H:%M') }}{% endif %}
+        </td>
+      </tr>
+      {% else %}
+      <tr><td colspan="5" class="hint">Нет показов</td></tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</div>
+
+{% if event.translations %}
+<div class="card">
+  <h2>Translations</h2>
+  <table class="data-table compact">
+    <thead><tr><th>Lang</th><th>Text</th><th>Updated</th></tr></thead>
+    <tbody>
+      {% for t in event.translations %}
+      <tr>
+        <td>{{ t.language_code }}</td>
+        <td>{{ t.translated_text[:200] }}</td>
+        <td>{{ t.updated_at.strftime('%Y-%m-%d') }}</td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</div>
+{% endif %}
+
+{% if event.injections %}
+<div class="card">
+  <h2>Injection log</h2>
+  <table class="data-table compact">
+    <thead><tr><th>Time</th><th>Viewer</th><th>Payload</th></tr></thead>
+    <tbody>
+      {% for j in event.injections %}
+      <tr>
+        <td>{{ j.created_at.strftime('%m-%d %H:%M') }}</td>
+        <td>{% if j.user_id %}<a href="/admin/users/{{ j.user_id }}">{{ j.user_id }}</a>{% else %}—{% endif %}</td>
+        <td class="mono">{{ j.properties }}</td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</div>
+{% endif %}
+{% endblock %}

@@ -3,9 +3,14 @@ from uuid import uuid4
 
 import asyncpg
 
+from typing import TYPE_CHECKING
+
 from app.config import settings
 from app.db.repositories.events import EventsRepository
 from app.services.ai_service import AIService
+
+if TYPE_CHECKING:
+    from app.services.analytics_service import AnalyticsService
 
 logger = logging.getLogger(__name__)
 
@@ -13,10 +18,17 @@ _GENERATION_LOCK_KEY = 77341101
 
 
 class AIGenerationService:
-    def __init__(self, pool: asyncpg.Pool, events_repo: EventsRepository, ai_service: AIService) -> None:
+    def __init__(
+        self,
+        pool: asyncpg.Pool,
+        events_repo: EventsRepository,
+        ai_service: AIService,
+        analytics_service: "AnalyticsService | None" = None,
+    ) -> None:
         self._pool = pool
         self._events = events_repo
         self._ai = ai_service
+        self._analytics = analytics_service
 
     async def ensure_pool_for_user(self, user_id, target: int | None = None) -> int:
         need = target or settings.batch_size
@@ -29,14 +41,45 @@ class AIGenerationService:
             if available >= threshold:
                 return created_total
 
-            batch_created = await self._generate_locked_batch(user_id)
+            if self._analytics:
+                await self._analytics.track(
+                    "ai_generation_triggered",
+                    user_id,
+                    available_count=available,
+                )
+
+            try:
+                batch_created, batch_id = await self._generate_locked_batch(user_id)
+            except Exception as exc:
+                logger.exception("AI generation failed for user %s", user_id)
+                if self._analytics:
+                    await self._analytics.track(
+                        "ai_generation_failed",
+                        user_id,
+                        error=str(exc),
+                    )
+                break
+
             created_total += batch_created
+            if batch_created > 0 and self._analytics:
+                await self._analytics.track(
+                    "ai_generation_completed",
+                    user_id,
+                    count=batch_created,
+                    batch_id=str(batch_id),
+                )
             if batch_created == 0:
+                if self._analytics:
+                    await self._analytics.track(
+                        "ai_generation_failed",
+                        user_id,
+                        error="empty_batch",
+                    )
                 break
 
         return created_total
 
-    async def _generate_locked_batch(self, user_id) -> int:
+    async def _generate_locked_batch(self, user_id) -> tuple[int, object]:
         async with self._pool.acquire() as conn:
             async with conn.transaction():
                 await conn.execute(
@@ -67,7 +110,7 @@ class AIGenerationService:
                 )
                 if not batch.events:
                     logger.warning("AI returned empty event batch")
-                    return 0
+                    return 0, None
 
                 batch_id = uuid4()
                 created_ids = await self._events.create_ai_generated_batch(
@@ -81,4 +124,4 @@ class AIGenerationService:
                     batch_id,
                     user_id,
                 )
-                return len(created_ids)
+                return len(created_ids), batch_id

@@ -1,0 +1,99 @@
+{% extends "base.html" %}
+{% from "_pagination.html" import pagination_bar %}
+{% block title %}Activity — LifeLedger Admin{% endblock %}
+{% block content %}
+<h1>Activity Log</h1>
+<p class="hint">
+  Журнал действий пользователей (<code>admin_event_log</code>).
+  Период до 90 дней. Старые действия восстановлены из БД (<code>backfilled</code> в payload).
+  Новые — пишутся в реальном времени через <code>AnalyticsService.track()</code>.
+</p>
+<p class="hint">Показано записей: <strong>{{ page.total }}</strong>{% if hidden_noisy %} · скрыто шумных: <strong>{{ hidden_noisy }}</strong> (<code>user_seen</code>, <code>event_shown</code>) — включите «показать» ниже{% endif %}</p>
+
+<form class="filters card" method="get" action="/admin/activity">
+  <div class="filter-grid">
+    <label>С
+      <input type="date" name="date_from" value="{{ filters.date_from.isoformat() }}" required>
+    </label>
+    <label>По
+      <input type="date" name="date_to" value="{{ filters.date_to.isoformat() }}" required>
+    </label>
+    <label>User ID
+      <input type="text" name="user_id" value="{{ filters.user_id or '' }}" placeholder="uuid">
+    </label>
+    <label>Username / имя / telegram_id
+      <input type="text" name="username" value="{{ filters.username or '' }}">
+    </label>
+    <label>Группа
+      <select name="event_group">
+        <option value="">— все —</option>
+        {% for key, label in event_groups.items() %}
+        <option value="{{ key }}" {% if filters.event_group == key %}selected{% endif %}>{{ label }}</option>
+        {% endfor %}
+      </select>
+    </label>
+    <label>Действие
+      <select name="event_name">
+        <option value="">— все —</option>
+        {% for item in catalog %}
+        <option value="{{ item.name }}" {% if filters.event_name == item.name %}selected{% endif %}>
+          {{ item.group_label }} · {{ item.label }}
+        </option>
+        {% endfor %}
+      </select>
+    </label>
+    <label>Event ID (из payload)
+      <input type="text" name="event_id" value="{{ filters.event_id or '' }}">
+    </label>
+    <label>Шумные события
+      <select name="include_noisy">
+        <option value="">скрыть</option>
+        <option value="yes" {% if filters.include_noisy %}selected{% endif %}>показать</option>
+      </select>
+    </label>
+  </div>
+  <button type="submit">Фильтр</button>
+  <a class="btn-link" href="/admin/activity">Сброс</a>
+</form>
+
+<div class="card table-scroll">
+  <table class="data-table compact">
+    <thead>
+      <tr>
+        <th>Время</th>
+        <th>Действие</th>
+        <th>Пользователь</th>
+        <th>Payload</th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for row in rows %}
+      <tr>
+        <td>{{ row.created_at.strftime('%Y-%m-%d %H:%M:%S') }}</td>
+        <td>
+          <code>{{ row.event_name }}</code>
+          <span class="hint">{{ row.event_label }}</span>
+        </td>
+        <td>
+          {% if row.user_id %}
+          <a href="/admin/users/{{ row.user_id }}">{{ row.user_display or row.user_id }}</a>
+          <br><a class="btn-link" href="/admin/activity?user_id={{ row.user_id }}&date_from={{ filters.date_from.isoformat() }}&date_to={{ filters.date_to.isoformat() }}">все действия</a>
+          {% else %}
+          <span class="hint">—</span>
+          {% endif %}
+        </td>
+        <td class="mono">
+          {{ row.properties[:240] }}{% if row.properties | length > 240 %}…{% endif %}
+          {% if row.linked_event_id %}
+          <br><a href="/admin/events/{{ row.linked_event_id }}">event →</a>
+          {% endif %}
+        </td>
+      </tr>
+      {% else %}
+      <tr><td colspan="4" class="hint">Нет записей за выбранный период</td></tr>
+      {% endfor %}
+    </tbody>
+  </table>
+  {{ pagination_bar(page, filter_query, build_query) }}
+</div>
+{% endblock %}

@@ -1,0 +1,43 @@
+{% extends "base.html" %}
+{% block title %}System — LifeLedger Admin{% endblock %}
+{% block content %}
+<h1>System</h1>
+
+<div class="two-col">
+  <div class="card">
+    <h2>Build</h2>
+    <table class="data-table compact">
+      <tr><th>Git commit</th><td>{{ info.git_commit or '—' }}</td></tr>
+      <tr><th>SCORING_CALIBRATION_VERSION</th><td>{{ info.calibration_version }}</td></tr>
+      <tr><th>BOT_MODE</th><td>{{ info.bot_mode }}</td></tr>
+      <tr><th>Webhook</th><td>{{ 'yes' if info.is_webhook else 'no' }}</td></tr>
+      <tr><th>Admin enabled</th><td>{{ 'yes' if info.admin_enabled else 'no' }}</td></tr>
+    </table>
+    <p class="hint"><a href="/health" target="_blank" rel="noopener">/health</a> — проверка сервиса</p>
+  </div>
+  <div class="card">
+    <h2>Analytics tables</h2>
+    <table class="data-table compact">
+      <tr><th>admin_event_log</th><td>{{ info.event_log_count }}</td></tr>
+      <tr><th>admin_action_log</th><td>{{ info.action_log_count }}</td></tr>
+      <tr><th>schema_migrations</th><td>{{ info.migration_count }}</td></tr>
+    </table>
+  </div>
+</div>
+
+<div class="card">
+  <h2>Environment</h2>
+  <p class="hint">Секреты показываются как set/missing, значения не выводятся.</p>
+  <table class="data-table compact">
+    <thead><tr><th>Variable</th><th>Value</th></tr></thead>
+    <tbody>
+      {% for flag in info.env_flags %}
+      <tr>
+        <td class="mono">{{ flag.name }}</td>
+        <td>{% if flag.is_secret %}<em>{{ flag.value }}</em>{% else %}{{ flag.value }}{% endif %}</td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</div>
+{% endblock %}

@@ -4,6 +4,7 @@ from aiogram import BaseMiddleware
 from aiogram.types import CallbackQuery, Message, TelegramObject, Update, User as TgUser
 
 from app.i18n import resolve_lang
+from app.services.analytics_service import AnalyticsService
 from app.services.user_service import UserService
 from app.utils.language import lang_prefix
 
@@ -39,8 +40,13 @@ class ServicesMiddleware(BaseMiddleware):
 
 
 class UserContextMiddleware(BaseMiddleware):
-    def __init__(self, user_service: UserService) -> None:
+    def __init__(
+        self,
+        user_service: UserService,
+        analytics_service: AnalyticsService | None = None,
+    ) -> None:
         self._user_service = user_service
+        self._analytics = analytics_service
 
     async def __call__(
         self,
@@ -50,10 +56,18 @@ class UserContextMiddleware(BaseMiddleware):
     ) -> Any:
         tg_user = _extract_tg_user(event)
         if tg_user:
-            user, _ = await self._user_service.get_or_create_user(tg_user)
+            user, is_new = await self._user_service.get_or_create_user(tg_user)
             data["user"] = user
             data["user_id"] = user.id
             data["lang"] = resolve_lang(tg_user.language_code)
             data["content_lang"] = lang_prefix(user.language_code)
+            if self._analytics:
+                await self._analytics.track("user_seen", user.id)
+                if is_new:
+                    await self._analytics.track(
+                        "user_registered",
+                        user.id,
+                        telegram_id=tg_user.id,
+                    )
 
         return await handler(event, data)

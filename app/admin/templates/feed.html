@@ -1,0 +1,42 @@
+{% extends "base.html" %}
+{% block title %}Feed — LifeLedger Admin{% endblock %}
+{% block content %}
+<h1>Feed Analytics</h1>
+
+<div class="kpi-grid">
+  <div class="kpi"><span class="kpi-label">Batches total</span><span class="kpi-value">{{ stats.batches_total }}</span></div>
+  <div class="kpi"><span class="kpi-label">Completed</span><span class="kpi-value">{{ stats.batches_completed }}</span></div>
+  <div class="kpi"><span class="kpi-label">Avg batch size</span><span class="kpi-value">{{ stats.avg_batch_size | default('—', true) }}</span></div>
+  <div class="kpi"><span class="kpi-label">Median batch size</span><span class="kpi-value">{{ stats.median_batch_size | default('—', true) }}</span></div>
+  <div class="kpi"><span class="kpi-label">% &lt; requested</span><span class="kpi-value">{% if stats.pct_under_requested is not none %}{{ stats.pct_under_requested }}%{% else %}—{% endif %}</span></div>
+  <div class="kpi"><span class="kpi-label">% &lt; 10</span><span class="kpi-value">{% if stats.pct_under_10 is not none %}{{ stats.pct_under_10 }}%{% else %}—{% endif %}</span></div>
+  <div class="kpi"><span class="kpi-label">Empty feed (7d)</span><span class="kpi-value">{{ stats.empty_feed_7d }}</span></div>
+  <div class="kpi"><span class="kpi-label">AI triggers (7d)</span><span class="kpi-value">{{ stats.ai_gen_triggers_7d }}</span></div>
+  <div class="kpi"><span class="kpi-label">Injections total</span><span class="kpi-value">{{ stats.injections_total }}</span></div>
+</div>
+
+<div class="two-col">
+  <div class="card">
+    <h2>Impressions by feed_tier × status</h2>
+    <table class="data-table compact">
+      <thead><tr><th>Tier</th><th>Status</th><th>Count</th></tr></thead>
+      <tbody>
+        {% for r in tiers %}
+        <tr><td>{{ r.feed_tier }}</td><td>{{ r.status }}</td><td>{{ r.count }}</td></tr>
+        {% else %}<tr><td colspan="3" class="hint">Нет данных (feed_tier заполняется при новых показах)</td></tr>{% endfor %}
+      </tbody>
+    </table>
+  </div>
+  <div class="card">
+    <h2>Injections by tier (log)</h2>
+    <table class="data-table compact">
+      <thead><tr><th>Tier</th><th>Count</th></tr></thead>
+      <tbody>
+        {% for r in injections %}
+        <tr><td>{{ r.feed_tier }}</td><td>{{ r.count }}</td></tr>
+        {% else %}<tr><td colspan="2" class="hint">—</td></tr>{% endfor %}
+      </tbody>
+    </table>
+  </div>
+</div>
+{% endblock %}
