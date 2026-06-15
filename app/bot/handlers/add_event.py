@@ -10,6 +10,7 @@ from app.bot.handlers.rate import send_feed
 from app.bot.keyboards import after_add_keyboard, event_type_keyboard, self_score_keyboard
 from app.bot.states import AddEventStates
 from app.bot.views import event_added_text
+from app.db.repositories.impressions import ImpressionsRepository
 from app.i18n import t
 from app.schemas.users import User
 from app.services.event_service import EventService
@@ -105,12 +106,14 @@ async def on_self_score(
         await callback.answer()
         return
 
+    await callback.answer()
+
     data = await state.get_data()
     event_type = data.get("event_type")
     original_text = data.get("original_text")
     if not event_type or not original_text:
         await state.clear()
-        await callback.answer(t("error_generic", lang), show_alert=True)
+        await callback.message.answer(t("error_generic", lang))
         return
 
     processing = await callback.message.answer(t("add_processing", lang))
@@ -128,7 +131,7 @@ async def on_self_score(
             await processing.delete()
         except Exception:
             pass
-        await callback.answer(t("error_generic", lang), show_alert=True)
+        await callback.message.answer(t("error_generic", lang))
         return
 
     try:
@@ -140,7 +143,6 @@ async def on_self_score(
         event_added_text(event, lang),
         reply_markup=after_add_keyboard(lang),
     )
-    await callback.answer()
 
 
 @router.callback_query(F.data == "nav:rate")
@@ -148,6 +150,7 @@ async def nav_rate(
     callback: CallbackQuery,
     feed_service: FeedService,
     translation_service: TranslationService,
+    impressions_repo: ImpressionsRepository,
     user_id: UUID,
     lang: str,
     content_lang: str,
@@ -160,6 +163,7 @@ async def nav_rate(
             content_lang,
             feed_service,
             translation_service,
+            impressions_repo,
             show_batch_intro=True,
         )
     await callback.answer()

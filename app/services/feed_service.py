@@ -222,22 +222,29 @@ class FeedService:
                 synced += 1
         return synced
 
+    def schedule_pool_refill(self, user_id: UUID) -> None:
+        if self._ai_generation:
+            self._ai_generation.schedule_pool_refill(user_id)
+
     async def _fetch_or_generate(self, user_id: UUID) -> list[FeedEventCandidate]:
         candidates = await self._events.fetch_available_candidates(
             user_id,
             settings.batch_size,
             settings.under_rated_threshold,
         )
-        if (
-            len(candidates) < settings.ai_generation_min_available
-            and self._ai_generation
-        ):
+        if not self._ai_generation:
+            return candidates
+
+        if len(candidates) == 0:
             await self._ai_generation.ensure_pool_for_user(user_id)
-            candidates = await self._events.fetch_available_candidates(
+            return await self._events.fetch_available_candidates(
                 user_id,
                 settings.batch_size,
                 settings.under_rated_threshold,
             )
+
+        if len(candidates) < settings.ai_generation_min_available:
+            self.schedule_pool_refill(user_id)
         return candidates
 
     async def get_event(self, event_id: UUID) -> EventForRating | None:

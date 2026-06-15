@@ -58,6 +58,7 @@ async def test_send_feed_empty():
         return_value=FeedStart(batch_id=UUID(int=0), batch_size=0, is_new_batch=False, event=None)
     )
     translation_service = MagicMock()
+    impressions_repo = MagicMock()
 
     await send_feed(
         message,
@@ -66,6 +67,7 @@ async def test_send_feed_empty():
         "ru",
         feed_service,
         translation_service,
+        impressions_repo,
         show_batch_intro=False,
     )
     message.answer.assert_awaited_once()
@@ -91,8 +93,11 @@ async def test_send_feed_with_event():
             event=event,
         )
     )
+    feed_service.schedule_pool_refill = MagicMock()
     translation_service = MagicMock()
     translation_service.get_display_text = AsyncMock(return_value="Test event text")
+    impressions_repo = MagicMock()
+    impressions_repo.list_shown_event_ids = AsyncMock(return_value=[])
 
     await send_feed(
         message,
@@ -101,6 +106,7 @@ async def test_send_feed_with_event():
         "ru",
         feed_service,
         translation_service,
+        impressions_repo,
         show_batch_intro=True,
     )
     assert message.answer.await_count == 2

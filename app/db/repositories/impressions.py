@@ -101,6 +101,25 @@ class ImpressionsRepository:
             batch_id,
         )
 
+    async def list_shown_event_ids(
+        self, user_id: UUID, batch_id: UUID, *, offset: int = 0, limit: int = 5
+    ) -> list[UUID]:
+        rows = await self._pool.fetch(
+            """
+            select event_id
+            from event_impressions
+            where user_id = $1 and batch_id = $2 and status = 'shown'
+            order by source_priority nulls last, shown_at
+            offset $3
+            limit $4
+            """,
+            user_id,
+            batch_id,
+            offset,
+            limit,
+        )
+        return [row["event_id"] for row in rows]
+
     async def mark_rated(self, user_id: UUID, event_id: UUID) -> None:
         await self._pool.execute(
             """

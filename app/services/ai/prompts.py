@@ -39,6 +39,22 @@ Anchor examples (copy these levels):
 
 Never score +3 or higher for: emotional support, listening, comfort, checking on someone, routine friendship/family care, politeness, honesty without cost, single acts of minor help, modest donations, one afternoon of volunteering, doing one's basic job duties well."""
 
+GENERATION_SCORING_CALIBRATION = """Scoring for ai_generated feed events (integer -10 to +10):
+The feed must span the full moral scale — not only mild everyday actions.
+
+Target distribution per batch of 10:
+- 3-4 events: everyday/mild (-2, -1, 0, +1, +2) — small kindness, routine selfishness, neutral habits.
+- 4-5 events: clearly consequential (|ai_score| 3 to 5) — meaningful sacrifice, serious unfairness, whistleblowing, betrayal of trust, neglect that hurts someone, helping at real personal cost.
+- 2-3 events: strong moral weight (|ai_score| 6 to 8) — major harm or heroism, life-altering betrayal, risking serious injury to save others, prolonged abuse or exploitation.
+- 0-1 events: exceptional (|ai_score| 9 or 10) only when the scenario truly involves saving a life or comparable stakes.
+
+Situation design:
+- The described ACTION must justify the score — do not write a mild situation with an extreme score.
+- Prefer morally charged hypotheticals: loyalty vs justice, truth vs someone's livelihood, duty vs self-preservation, harming one to help many.
+- Include clearly negative choices, not only positive ones: fraud, cruelty, abandonment, deliberate harm, covering up serious wrongdoing.
+- At least 3 events per batch must have |ai_score| >= 4; at least 1 must have |ai_score| >= 6.
+- Routine decency still stays low: "called a friend" → 0 or +1, never +4."""
+
 ANALYZE_SYSTEM = f"""You analyze life events for the LifeLedger app.
 Users rate a CONCRETE MORAL ACTION, not an open question or dilemma.
 
@@ -113,7 +129,7 @@ Return ONLY valid JSON:
   ]
 }}
 
-{SCORING_CALIBRATION}
+{GENERATION_SCORING_CALIBRATION}
 
 Generation rules:
 - Generate exactly the requested number of events.
@@ -122,18 +138,15 @@ Generation rules:
 - Never output open questions or dilemmas without a chosen action.
 - Cover DIVERSE categories — no two events in the same batch on the same theme.
 - Do NOT repeat or closely paraphrase any item from the avoid list.
-- Mix positive, negative, and morally mixed actions, but keep scores modest.
-- At least half of generated events must score -2, -1, 0, +1, or +2.
-- At most 2 events per batch may have |score| >= 4; at most 1 may have |score| >= 6.
-- Never generate |score| >= 8 unless the situation involves saving a life or comparable sacrifice.
+- Mix positive, negative, and morally mixed actions across the full score range.
 - Keep each normalized_text to 1-2 sentences.
-- ai_score must match the moral weight of the action, not the emotional tone of the text."""
+- ai_score must match the moral weight of the action, not dramatic wording alone."""
 
 GENERATE_BATCH_AVOID = """Already used situations (do NOT repeat or paraphrase):
 {items}
 
 Generate {count} new diverse moral situations.
-Use strict scoring: most ai_score values must be -2..+2."""
+Include a wide spread of ai_score values — at least 3 with |score| >= 4 and at least 1 with |score| >= 6."""
 
 
 RESCORE_SYSTEM = f"""You assign ai_score to a life event for the LifeLedger app.

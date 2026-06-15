@@ -1,3 +1,4 @@
+import asyncio
 from uuid import UUID
 
 import asyncpg
@@ -46,3 +47,6 @@ class TranslationService:
         )
         await self._translations.save(event_id, target, translated)
         return translated
+
+    def prefetch_display_text(self, event_id: UUID, target_language: str) -> None:
+        asyncio.create_task(self.get_display_text(event_id, target_language))

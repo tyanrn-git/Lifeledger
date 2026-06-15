@@ -31,6 +31,20 @@ async def _display_text(
     return await translation_service.get_display_text(event_id, content_lang)
 
 
+async def _prefetch_upcoming_translations(
+    impressions_repo: ImpressionsRepository,
+    translation_service: TranslationService,
+    user_id: UUID,
+    batch_id: UUID,
+    content_lang: str,
+) -> None:
+    upcoming = await impressions_repo.list_shown_event_ids(
+        user_id, batch_id, offset=1, limit=3
+    )
+    for event_id in upcoming:
+        translation_service.prefetch_display_text(event_id, content_lang)
+
+
 async def send_feed(
     message: Message,
     user_id: UUID,
@@ -38,6 +52,7 @@ async def send_feed(
     content_lang: str,
     feed_service: FeedService,
     translation_service: TranslationService,
+    impressions_repo: ImpressionsRepository,
     *,
     show_batch_intro: bool,
     force_new: bool = False,
@@ -56,6 +71,10 @@ async def send_feed(
         event_card_text(feed.event, lang, display),
         reply_markup=rating_keyboard(feed.event.id, lang),
     )
+    await _prefetch_upcoming_translations(
+        impressions_repo, translation_service, user_id, feed.batch_id, content_lang
+    )
+    feed_service.schedule_pool_refill(user_id)
 
 
 async def send_next_event(
@@ -66,6 +85,7 @@ async def send_next_event(
     content_lang: str,
     feed_service: FeedService,
     translation_service: TranslationService,
+    impressions_repo: ImpressionsRepository,
 ) -> None:
     event = await feed_service.get_next_in_batch(user_id, batch_id)
     if event is None:
@@ -73,12 +93,16 @@ async def send_next_event(
             t("batch_complete", lang, size=settings.batch_size),
             reply_markup=batch_complete_keyboard(lang, settings.batch_size),
         )
+        feed_service.schedule_pool_refill(user_id)
         return
 
     display = await _display_text(translation_service, event.id, content_lang)
     await message.answer(
         event_card_text(event, lang, display),
         reply_markup=rating_keyboard(event.id, lang),
+    )
+    await _prefetch_upcoming_translations(
+        impressions_repo, translation_service, user_id, batch_id, content_lang
     )
 
 
@@ -88,8 +112,11 @@ async def on_rate(
     rating_service: RatingService,
     notification_service: NotificationService,
     impressions_repo: ImpressionsRepository,
+    feed_service: FeedService,
+    translation_service: TranslationService,
     user_id: UUID,
     lang: str,
+    content_lang: str,
 ) -> None:
     if not callback.data or not callback.message:
         await callback.answer()
@@ -141,6 +168,11 @@ async def on_rate(
         rating_result_text(score, event, lang),
         reply_markup=keyboard,
     )
+    feed_service.schedule_pool_refill(user_id)
+    if batch_id:
+        await _prefetch_upcoming_translations(
+            impressions_repo, translation_service, user_id, batch_id, content_lang
+        )
 
 
 @router.callback_query(F.data.startswith("skip:"))
@@ -178,6 +210,7 @@ async def on_skip(
             content_lang,
             feed_service,
             translation_service,
+            impressions_repo,
         )
 
 
@@ -186,6 +219,7 @@ async def on_feed_next(
     callback: CallbackQuery,
     feed_service: FeedService,
     translation_service: TranslationService,
+    impressions_repo: ImpressionsRepository,
     user_id: UUID,
     lang: str,
     content_lang: str,
@@ -210,6 +244,7 @@ async def on_feed_next(
         content_lang,
         feed_service,
         translation_service,
+        impressions_repo,
     )
 
 
@@ -218,6 +253,7 @@ async def on_new_batch(
     callback: CallbackQuery,
     feed_service: FeedService,
     translation_service: TranslationService,
+    impressions_repo: ImpressionsRepository,
     user_id: UUID,
     lang: str,
     content_lang: str,
@@ -235,6 +271,7 @@ async def on_new_batch(
         content_lang,
         feed_service,
         translation_service,
+        impressions_repo,
         show_batch_intro=True,
         force_new=True,
     )

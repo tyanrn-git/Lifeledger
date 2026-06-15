@@ -7,6 +7,7 @@ from aiogram.types import Message
 
 from app.bot.handlers.friends import handle_invite_deep_link
 from app.bot.handlers.rate import send_feed
+from app.db.repositories.impressions import ImpressionsRepository
 from app.i18n import t
 from app.services.feed_service import FeedService
 from app.services.friendship_service import FriendshipService
@@ -24,6 +25,7 @@ async def cmd_start(
     user_service: UserService,
     feed_service: FeedService,
     translation_service: TranslationService,
+    impressions_repo: ImpressionsRepository,
     friendship_service: FriendshipService,
     lang: str,
     content_lang: str,
@@ -50,6 +52,7 @@ async def cmd_start(
         content_lang,
         feed_service,
         translation_service,
+        impressions_repo,
         show_batch_intro=is_new,
     )
 
@@ -60,6 +63,7 @@ async def cmd_rate(
     user_id,
     feed_service: FeedService,
     translation_service: TranslationService,
+    impressions_repo: ImpressionsRepository,
     lang: str,
     content_lang: str,
 ) -> None:
@@ -73,5 +77,6 @@ async def cmd_rate(
         content_lang,
         feed_service,
         translation_service,
+        impressions_repo,
         show_batch_intro=True,
     )

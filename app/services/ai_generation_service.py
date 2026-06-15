@@ -1,5 +1,6 @@
+import asyncio
 import logging
-from uuid import uuid4
+from uuid import UUID, uuid4
 
 import asyncpg
 
@@ -29,6 +30,23 @@ class AIGenerationService:
         self._events = events_repo
         self._ai = ai_service
         self._analytics = analytics_service
+        self._refill_tasks: dict[UUID, asyncio.Task] = {}
+
+    def schedule_pool_refill(self, user_id: UUID) -> None:
+        task = self._refill_tasks.get(user_id)
+        if task and not task.done():
+            return
+        self._refill_tasks[user_id] = asyncio.create_task(
+            self._run_pool_refill(user_id)
+        )
+
+    async def _run_pool_refill(self, user_id: UUID) -> None:
+        try:
+            await self.ensure_pool_for_user(user_id)
+        except Exception:
+            logger.exception("Background AI pool refill failed for user %s", user_id)
+        finally:
+            self._refill_tasks.pop(user_id, None)
 
     async def ensure_pool_for_user(self, user_id, target: int | None = None) -> int:
         need = target or settings.batch_size
