@@ -1,4 +1,5 @@
 import asyncio
+import logging
 from uuid import UUID
 
 import asyncpg
@@ -6,6 +7,8 @@ import asyncpg
 from app.db.repositories.translations import TranslationsRepository
 from app.services.ai_service import AIService
 from app.utils.language import lang_prefix, languages_match
+
+logger = logging.getLogger(__name__)
 
 
 class TranslationService:
@@ -18,6 +21,7 @@ class TranslationService:
         self._pool = pool
         self._translations = translations_repo
         self._ai = ai_service
+        self._inflight: set[tuple[UUID, str]] = set()
 
     async def get_display_text(self, event_id: UUID, target_language: str) -> str:
         row = await self._pool.fetchrow(
@@ -49,4 +53,18 @@ class TranslationService:
         return translated
 
     def prefetch_display_text(self, event_id: UUID, target_language: str) -> None:
-        asyncio.create_task(self.get_display_text(event_id, target_language))
+        target = lang_prefix(target_language)
+        key = (event_id, target)
+        if key in self._inflight:
+            return
+        self._inflight.add(key)
+
+        async def _run() -> None:
+            try:
+                await self.get_display_text(event_id, target_language)
+            except Exception:
+                logger.exception("Failed to prefetch translation for event %s", event_id)
+            finally:
+                self._inflight.discard(key)
+
+        asyncio.create_task(_run())

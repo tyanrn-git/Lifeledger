@@ -1,3 +1,4 @@
+import asyncio
 import logging
 from uuid import UUID
 
@@ -31,18 +32,37 @@ async def _display_text(
     return await translation_service.get_display_text(event_id, content_lang)
 
 
-async def _prefetch_upcoming_translations(
+async def _notify_event_rated(
+    notification_service: NotificationService,
+    event_id: UUID,
+) -> None:
+    try:
+        await notification_service.on_event_rated(event_id)
+    except Exception:
+        logger.exception("Failed to notify author for event %s", event_id)
+
+
+def _schedule_batch_translation_prefetch(
     impressions_repo: ImpressionsRepository,
     translation_service: TranslationService,
     user_id: UUID,
     batch_id: UUID,
     content_lang: str,
+    *,
+    skip_event_id: UUID | None = None,
 ) -> None:
-    upcoming = await impressions_repo.list_shown_event_ids(
-        user_id, batch_id, offset=1, limit=3
-    )
-    for event_id in upcoming:
-        translation_service.prefetch_display_text(event_id, content_lang)
+    async def _run() -> None:
+        try:
+            event_ids = await impressions_repo.list_shown_event_ids(
+                user_id, batch_id, offset=0, limit=settings.batch_size
+            )
+            for event_id in event_ids:
+                if event_id != skip_event_id:
+                    translation_service.prefetch_display_text(event_id, content_lang)
+        except Exception:
+            logger.exception("Failed to prefetch batch translations for user %s", user_id)
+
+    asyncio.create_task(_run())
 
 
 async def send_feed(
@@ -71,8 +91,13 @@ async def send_feed(
         event_card_text(feed.event, lang, display),
         reply_markup=rating_keyboard(feed.event.id, lang),
     )
-    await _prefetch_upcoming_translations(
-        impressions_repo, translation_service, user_id, feed.batch_id, content_lang
+    _schedule_batch_translation_prefetch(
+        impressions_repo,
+        translation_service,
+        user_id,
+        feed.batch_id,
+        content_lang,
+        skip_event_id=feed.event.id,
     )
     feed_service.schedule_pool_refill(user_id)
 
@@ -101,8 +126,13 @@ async def send_next_event(
         event_card_text(event, lang, display),
         reply_markup=rating_keyboard(event.id, lang),
     )
-    await _prefetch_upcoming_translations(
-        impressions_repo, translation_service, user_id, batch_id, content_lang
+    _schedule_batch_translation_prefetch(
+        impressions_repo,
+        translation_service,
+        user_id,
+        batch_id,
+        content_lang,
+        skip_event_id=event.id,
     )
 
 
@@ -112,7 +142,6 @@ async def on_rate(
     rating_service: RatingService,
     notification_service: NotificationService,
     impressions_repo: ImpressionsRepository,
-    feed_service: FeedService,
     translation_service: TranslationService,
     user_id: UUID,
     lang: str,
@@ -141,7 +170,7 @@ async def on_rate(
     await callback.answer()
 
     try:
-        event = await rating_service.rate_event(user_id, event_id, score)
+        event, batch_id = await rating_service.rate_event(user_id, event_id, score)
     except PermissionError:
         await callback.message.answer(t("own_event", lang))
         return
@@ -156,22 +185,21 @@ async def on_rate(
         await callback.message.answer(t("error_generic", lang))
         return
 
-    try:
-        await notification_service.on_event_rated(event_id)
-    except Exception:
-        logger.exception("Failed to notify author for event %s", event_id)
+    asyncio.create_task(_notify_event_rated(notification_service, event_id))
 
-    batch_id = await impressions_repo.get_batch_id(user_id, event_id)
     keyboard = next_event_keyboard(lang, batch_id) if batch_id else None
 
     await callback.message.answer(
         rating_result_text(score, event, lang),
         reply_markup=keyboard,
     )
-    feed_service.schedule_pool_refill(user_id)
     if batch_id:
-        await _prefetch_upcoming_translations(
-            impressions_repo, translation_service, user_id, batch_id, content_lang
+        _schedule_batch_translation_prefetch(
+            impressions_repo,
+            translation_service,
+            user_id,
+            batch_id,
+            content_lang,
         )
 
 

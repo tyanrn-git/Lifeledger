@@ -1,9 +1,11 @@
+import time
 from typing import Any, Awaitable, Callable
 
 from aiogram import BaseMiddleware
 from aiogram.types import CallbackQuery, Message, TelegramObject, Update, User as TgUser
 
 from app.i18n import resolve_lang
+from app.schemas.users import User
 from app.services.analytics_service import AnalyticsService
 from app.services.user_service import UserService
 from app.utils.language import lang_prefix
@@ -23,6 +25,9 @@ def _extract_tg_user(event: TelegramObject) -> TgUser | None:
     if isinstance(event, CallbackQuery):
         return event.from_user
     return None
+
+
+_USER_CACHE_TTL_SEC = 45.0
 
 
 class ServicesMiddleware(BaseMiddleware):
@@ -47,6 +52,7 @@ class UserContextMiddleware(BaseMiddleware):
     ) -> None:
         self._user_service = user_service
         self._analytics = analytics_service
+        self._user_cache: dict[int, tuple[User, float]] = {}
 
     async def __call__(
         self,
@@ -56,7 +62,14 @@ class UserContextMiddleware(BaseMiddleware):
     ) -> Any:
         tg_user = _extract_tg_user(event)
         if tg_user:
-            user, is_new = await self._user_service.get_or_create_user(tg_user)
+            is_new = False
+            cached = self._user_cache.get(tg_user.id)
+            now = time.monotonic()
+            if cached and now - cached[1] < _USER_CACHE_TTL_SEC:
+                user = cached[0]
+            else:
+                user, is_new = await self._user_service.get_or_create_user(tg_user)
+                self._user_cache[tg_user.id] = (user, now)
             data["user"] = user
             data["user_id"] = user.id
             data["lang"] = resolve_lang(tg_user.language_code)

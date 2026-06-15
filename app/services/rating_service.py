@@ -31,9 +31,14 @@ class RatingService:
         self._friendships = friendships_repo
         self._analytics = analytics_service
 
-    async def rate_event(self, user_id: UUID, event_id: UUID, score: int) -> EventForRating:
+    async def rate_event(
+        self, user_id: UUID, event_id: UUID, score: int
+    ) -> tuple[EventForRating, UUID | None]:
         if not (-10 <= score <= 10):
             raise ValueError("Score out of range")
+
+        batch_id: UUID | None = None
+        rating_scope = "community"
 
         async with self._pool.acquire() as conn:
             async with conn.transaction():
@@ -79,11 +84,12 @@ class RatingService:
                     rating_scope,
                     score,
                 )
-                await conn.execute(
+                batch_id = await conn.fetchval(
                     """
                     update event_impressions
                     set status = 'rated', rated_at = now()
                     where user_id = $1 and event_id = $2
+                    returning batch_id
                     """,
                     user_id,
                     event_id,
@@ -102,7 +108,7 @@ class RatingService:
         event = await self._events.get_for_rating(event_id)
         if not event:
             raise LookupError("event_not_found")
-        return event
+        return event, batch_id
 
     async def skip_event(self, user_id: UUID, event_id: UUID) -> None:
         batch_id, feed_tier = await self._impressions.get_impression_meta(user_id, event_id)
