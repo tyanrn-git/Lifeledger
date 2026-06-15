@@ -128,8 +128,10 @@ async def bootstrap() -> tuple[Bot, Dispatcher, object, dict]:
 
     ai_service = AIService(build_ai_provider())
     recalibration = ScoreRecalibrationService(pool, ai_service)
-    await recalibration.refresh_all_community_scores()
-    asyncio.create_task(recalibration.run_background_rescore())
+    if settings.startup_score_refresh:
+        asyncio.create_task(recalibration.refresh_all_community_scores())
+    if settings.startup_ai_rescore:
+        asyncio.create_task(recalibration.run_background_rescore())
 
     services = build_services(pool, bot_username, bot, ai_service=ai_service)
     dp = setup_dispatcher(services)

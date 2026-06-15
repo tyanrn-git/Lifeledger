@@ -85,14 +85,15 @@ async def settings_enable(
         await callback.answer()
         return
 
+    await callback.answer()
+
     await user_service.set_notifications_enabled(user_id, True)
-    await analytics_service.track(
+    analytics_service.track_background(
         "settings_notifications_changed",
         user_id,
         enabled=True,
     )
     await _edit_settings(callback, user_service, user_id, lang)
-    await callback.answer(t("settings_notifications_enabled", lang))
 
 
 @router.callback_query(F.data == "settings:disable")
@@ -107,14 +108,15 @@ async def settings_disable(
         await callback.answer()
         return
 
+    await callback.answer()
+
     await user_service.set_notifications_enabled(user_id, False)
-    await analytics_service.track(
+    analytics_service.track_background(
         "settings_notifications_changed",
         user_id,
         enabled=False,
     )
     await _edit_settings(callback, user_service, user_id, lang)
-    await callback.answer(t("settings_notifications_disabled", lang))
 
 
 @router.callback_query(F.data.startswith("settings:lang:page:"))
@@ -158,12 +160,13 @@ async def settings_language_set(
         await callback.answer()
         return
 
+    await callback.answer()
+
     code = callback.data.split(":", 3)[3]
     await user_service.set_content_language(user_id, code)
-    await analytics_service.track(
+    analytics_service.track_background(
         "settings_language_changed",
         user_id,
         language_code=code,
     )
     await _edit_settings(callback, user_service, user_id, lang)
-    await callback.answer(t("settings_content_language_changed", lang))

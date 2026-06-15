@@ -48,9 +48,32 @@ class FeedService:
         self._ai_generation = ai_generation_service
         self._analytics = analytics_service
 
-    async def _track(self, event_name: str, user_id: UUID, **properties) -> None:
+    def _track(self, event_name: str, user_id: UUID, **properties) -> None:
         if self._analytics:
-            await self._analytics.track(event_name, user_id, **properties)
+            self._analytics.track_background(event_name, user_id, **properties)
+
+    def _track_shown_batch(
+        self,
+        user_id: UUID,
+        batch_id: UUID,
+        event_ids: list[UUID],
+        feed_tiers: list[int],
+    ) -> None:
+        if not self._analytics:
+            return
+        rows = [
+            (
+                "event_shown",
+                user_id,
+                {
+                    "event_id": str(event_id),
+                    "batch_id": str(batch_id),
+                    "feed_tier": tier,
+                },
+            )
+            for event_id, tier in zip(event_ids, feed_tiers)
+        ]
+        self._analytics.track_many_background(rows)
 
     async def start_or_resume(self, user_id: UUID, *, force_new: bool = False) -> FeedStart:
         batch_id = None if force_new else await self._batches.get_active_batch(user_id)
@@ -62,7 +85,7 @@ class FeedService:
             if event_id:
                 event = await self._events.get_for_rating(event_id)
                 remaining = await self._batches.count_remaining(user_id, batch_id)
-                await self._track(
+                self._track(
                     "feed_started",
                     user_id,
                     batch_id=str(batch_id),
@@ -70,7 +93,7 @@ class FeedService:
                     batch_size=remaining,
                 )
                 return FeedStart(batch_id, remaining, False, event)
-            await self._track(
+            self._track(
                 "batch_completed",
                 user_id,
                 batch_id=str(batch_id),
@@ -80,7 +103,7 @@ class FeedService:
         candidates = await self._fetch_or_generate(user_id)
 
         if not candidates:
-            await self._track("feed_empty", user_id)
+            self._track("feed_empty", user_id)
             return FeedStart(UUID(int=0), 0, False, None)
 
         event_ids = [c.id for c in candidates]
@@ -101,28 +124,21 @@ class FeedService:
         )
         is_new_batch = True
 
-        await self._track(
+        self._track(
             "batch_created",
             user_id,
             batch_id=str(batch_id),
             requested_size=settings.batch_size,
             actual_size=len(event_ids),
         )
-        await self._track(
+        self._track(
             "feed_started",
             user_id,
             batch_id=str(batch_id),
             is_new_batch=True,
             batch_size=len(event_ids),
         )
-        for event_id, tier in zip(event_ids, feed_tiers):
-            await self._track(
-                "event_shown",
-                user_id,
-                event_id=str(event_id),
-                batch_id=str(batch_id),
-                feed_tier=tier,
-            )
+        self._track_shown_batch(user_id, batch_id, event_ids, feed_tiers)
 
         event = await self._events.get_for_rating(event_ids[0])
         return FeedStart(batch_id, len(event_ids), is_new_batch, event)
@@ -181,7 +197,7 @@ class FeedService:
             viewer_id, batch_id, event_id, priority, feed_tier
         )
         if injected:
-            await self._track(
+            self._track(
                 "event_injected_into_batch",
                 viewer_id,
                 event_id=str(event_id),
@@ -231,7 +247,7 @@ class FeedService:
         await self._sync_user_events_into_batch(user_id, batch_id)
         event_id = await self._impressions.get_next_shown(user_id, batch_id)
         if not event_id:
-            await self._track(
+            self._track(
                 "batch_completed",
                 user_id,
                 batch_id=str(batch_id),

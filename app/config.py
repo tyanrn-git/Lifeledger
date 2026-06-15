@@ -20,6 +20,13 @@ class Settings(BaseSettings):
     ai_generation_batch_size: int = 10
     ai_generation_min_available: int = 10
 
+    db_pool_min_size: int = 2
+    db_pool_max_size: int = 20
+
+    # Score refresh on startup (disable in prod for faster cold start)
+    startup_score_refresh: bool = False
+    startup_ai_rescore: bool = False
+
     admin_password: str = ""
     admin_session_ttl_hours: int = 24
 

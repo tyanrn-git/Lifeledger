@@ -42,7 +42,7 @@ class AIGenerationService:
                 return created_total
 
             if self._analytics:
-                await self._analytics.track(
+                self._analytics.track_background(
                     "ai_generation_triggered",
                     user_id,
                     available_count=available,
@@ -53,7 +53,7 @@ class AIGenerationService:
             except Exception as exc:
                 logger.exception("AI generation failed for user %s", user_id)
                 if self._analytics:
-                    await self._analytics.track(
+                    self._analytics.track_background(
                         "ai_generation_failed",
                         user_id,
                         error=str(exc),
@@ -62,7 +62,7 @@ class AIGenerationService:
 
             created_total += batch_created
             if batch_created > 0 and self._analytics:
-                await self._analytics.track(
+                self._analytics.track_background(
                     "ai_generation_completed",
                     user_id,
                     count=batch_created,
@@ -70,7 +70,7 @@ class AIGenerationService:
                 )
             if batch_created == 0:
                 if self._analytics:
-                    await self._analytics.track(
+                    self._analytics.track_background(
                         "ai_generation_failed",
                         user_id,
                         error="empty_batch",

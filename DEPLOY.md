@@ -85,3 +85,24 @@ bash scripts/wait_railway_deploy.sh
 ```
 
 Опционально в `.env` для скрипта: `RAILWAY_PUBLIC_DOMAIN=your-app.up.railway.app`
+
+## 8. Тестирование
+
+### Автотесты (локально)
+
+```bash
+python -m pytest tests/ -q
+bash scripts/run_qa.sh          # pytest + HTTP smoke
+```
+
+**58 тестов:** auth, smoke всех страниц админки, bot handlers (help, friends, feed, settings), analytics, scoring.
+
+### HTTP smoke (prod или local)
+
+```bash
+python scripts/smoke_http.py
+python scripts/smoke_http.py --base http://127.0.0.1:8080
+ADMIN_PASSWORD=yourpass python scripts/smoke_http.py --base https://lifeledger-production-c53d.up.railway.app
+```
+
+Без `ADMIN_PASSWORD` проверяется только `/health` и статус `/admin/login`.

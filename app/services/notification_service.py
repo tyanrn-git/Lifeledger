@@ -83,7 +83,7 @@ class NotificationService:
             user_id, event_id, notification_type, body
         )
         if self._analytics:
-            await self._analytics.track(
+            self._analytics.track_background(
                 "notification_created",
                 user_id,
                 notification_id=str(notification_id),
@@ -101,7 +101,7 @@ class NotificationService:
             await self._bot.send_message(user.telegram_id, body)
             await self._notifications.mark_sent(notification_id)
             if self._analytics:
-                await self._analytics.track(
+                self._analytics.track_background(
                     "notification_sent",
                     user_id,
                     notification_id=str(notification_id),
@@ -113,7 +113,7 @@ class NotificationService:
                 user_id,
             )
             if self._analytics:
-                await self._analytics.track(
+                self._analytics.track_background(
                     "notification_failed",
                     user_id,
                     notification_id=str(notification_id),

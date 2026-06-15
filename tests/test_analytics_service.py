@@ -18,6 +18,22 @@ async def test_track_inserts_via_repo():
 
 
 @pytest.mark.asyncio
+async def test_track_many_inserts_batch():
+    repo = AsyncMock()
+    service = AnalyticsService(repo)
+    user_id = uuid4()
+
+    await service.track_many(
+        [
+            ("event_shown", user_id, {"event_id": "1"}),
+            ("event_shown", user_id, {"event_id": "2"}),
+        ]
+    )
+
+    repo.insert_many.assert_awaited_once()
+
+
+@pytest.mark.asyncio
 async def test_track_swallows_repo_errors():
     repo = AsyncMock()
     repo.insert.side_effect = RuntimeError("db down")

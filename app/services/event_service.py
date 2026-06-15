@@ -57,7 +57,7 @@ class EventService:
         if self._feed:
             await self._feed.on_user_event_created(event.id, author_id)
         if self._analytics:
-            await self._analytics.track(
+            self._analytics.track_background(
                 "event_created",
                 author_id,
                 event_id=str(event.id),
@@ -75,7 +75,7 @@ class EventService:
     async def delete_event(self, event_id: UUID, user_id: UUID) -> bool:
         deleted = await self._events.soft_delete(event_id, user_id)
         if deleted and self._analytics:
-            await self._analytics.track(
+            self._analytics.track_background(
                 "event_deleted",
                 user_id,
                 event_id=str(event_id),

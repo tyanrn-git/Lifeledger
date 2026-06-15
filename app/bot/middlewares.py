@@ -62,9 +62,9 @@ class UserContextMiddleware(BaseMiddleware):
             data["lang"] = resolve_lang(tg_user.language_code)
             data["content_lang"] = lang_prefix(user.language_code)
             if self._analytics:
-                await self._analytics.track("user_seen", user.id)
+                self._analytics.track_background("user_seen", user.id)
                 if is_new:
-                    await self._analytics.track(
+                    self._analytics.track_background(
                         "user_registered",
                         user.id,
                         telegram_id=tg_user.id,

@@ -81,11 +81,11 @@ class FriendshipService:
                 friendship = await self._friendships.get_by_id(existing.id)
                 if not friendship:
                     raise FriendshipError("friendship_not_found")
-                await self._track_acceptance(invitee_id, inviter_id)
+                self._track_acceptance(invitee_id, inviter_id)
                 return friendship
 
         friendship = await self._friendships.create_pending(inviter_id, invitee_id)
-        await self._track_invite(inviter_id, invitee_id)
+        self._track_invite(inviter_id, invitee_id)
         return friendship
 
     async def accept_friendship(self, friendship_id: UUID, user_id: UUID) -> bool:
@@ -96,7 +96,7 @@ class FriendshipService:
         if ok:
             friend_id = self._other_user_id(friendship, user_id)
             if friend_id:
-                await self._track_acceptance(user_id, friend_id)
+                self._track_acceptance(user_id, friend_id)
         return ok
 
     async def reject_friendship(self, friendship_id: UUID, user_id: UUID) -> bool:
@@ -109,11 +109,11 @@ class FriendshipService:
             props = {}
             if friend_id:
                 props["friend_user_id"] = str(friend_id)
-            await self._analytics.track("friendship_rejected", user_id, **props)
+            self._analytics.track_background("friendship_rejected", user_id, **props)
         return ok
 
     async def track_invite_link_requested(self, user_id: UUID) -> None:
-        await self._track_invite(user_id, None)
+        self._track_invite(user_id, None)
 
     async def count_friends(self, user_id: UUID) -> int:
         return await self._friendships.count_accepted_friends(user_id)
@@ -140,18 +140,18 @@ class FriendshipService:
             return friendship.requester_user_id
         return None
 
-    async def _track_invite(self, inviter_id: UUID, invitee_id: UUID | None) -> None:
+    def _track_invite(self, inviter_id: UUID, invitee_id: UUID | None) -> None:
         if not self._analytics:
             return
         props: dict[str, str] = {}
         if invitee_id:
             props["friend_user_id"] = str(invitee_id)
-        await self._analytics.track("friend_invite_sent", inviter_id, **props)
+        self._analytics.track_background("friend_invite_sent", inviter_id, **props)
 
-    async def _track_acceptance(self, user_id: UUID, friend_id: UUID) -> None:
+    def _track_acceptance(self, user_id: UUID, friend_id: UUID) -> None:
         if not self._analytics:
             return
-        await self._analytics.track(
+        self._analytics.track_background(
             "friendship_accepted",
             user_id,
             friend_user_id=str(friend_id),

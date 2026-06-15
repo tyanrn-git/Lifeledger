@@ -98,7 +98,7 @@ async def test_friendship_accept_tracks_analytics():
     )
     friendships.accept = AsyncMock(return_value=True)
     analytics = MagicMock()
-    analytics.track = AsyncMock()
+    analytics.track_background = MagicMock()
 
     service = FriendshipService(friendships, MagicMock(), "bot", analytics)
     ok = await service.accept_friendship(
@@ -106,5 +106,5 @@ async def test_friendship_accept_tracks_analytics():
         USER_ID,
     )
     assert ok
-    analytics.track.assert_awaited_once()
-    assert analytics.track.await_args.args[0] == "friendship_accepted"
+    analytics.track_background.assert_called_once()
+    assert analytics.track_background.call_args.args[0] == "friendship_accepted"

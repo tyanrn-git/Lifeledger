@@ -111,20 +111,22 @@ async def on_rate(
         await callback.answer()
         return
 
+    await callback.answer()
+
     try:
         event = await rating_service.rate_event(user_id, event_id, score)
     except PermissionError:
-        await callback.answer(t("own_event", lang), show_alert=True)
+        await callback.message.answer(t("own_event", lang))
         return
     except ValueError as exc:
         if str(exc) == "already_rated":
-            await callback.answer(t("already_rated", lang), show_alert=True)
+            await callback.message.answer(t("already_rated", lang))
             return
-        await callback.answer(t("error_generic", lang), show_alert=True)
+        await callback.message.answer(t("error_generic", lang))
         return
     except Exception:
         logger.exception("Failed to rate event")
-        await callback.answer(t("error_generic", lang), show_alert=True)
+        await callback.message.answer(t("error_generic", lang))
         return
 
     try:
@@ -139,7 +141,6 @@ async def on_rate(
         rating_result_text(score, event, lang),
         reply_markup=keyboard,
     )
-    await callback.answer()
 
 
 @router.callback_query(F.data.startswith("skip:"))
@@ -162,6 +163,8 @@ async def on_skip(
         await callback.answer()
         return
 
+    await callback.answer()
+
     await rating_service.skip_event(user_id, event_id)
     batch_id = await impressions_repo.get_batch_id(user_id, event_id)
 
@@ -176,7 +179,6 @@ async def on_skip(
             feed_service,
             translation_service,
         )
-    await callback.answer()
 
 
 @router.callback_query(F.data.startswith("feed:next"))
@@ -198,6 +200,8 @@ async def on_feed_next(
         await callback.answer()
         return
 
+    await callback.answer()
+
     await send_next_event(
         callback.message,
         user_id,
@@ -207,7 +211,6 @@ async def on_feed_next(
         feed_service,
         translation_service,
     )
-    await callback.answer()
 
 
 @router.callback_query(F.data == "feed:new_batch")
@@ -223,6 +226,8 @@ async def on_new_batch(
         await callback.answer()
         return
 
+    await callback.answer()
+
     await send_feed(
         callback.message,
         user_id,
@@ -233,4 +238,3 @@ async def on_new_batch(
         show_batch_intro=True,
         force_new=True,
     )
-    await callback.answer()

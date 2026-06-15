@@ -91,7 +91,7 @@ class RatingService:
                 await self._recalculate_event_scores(event_id, conn)
 
         if self._analytics:
-            await self._analytics.track(
+            self._analytics.track_background(
                 "event_rated",
                 user_id,
                 event_id=str(event_id),
@@ -113,7 +113,7 @@ class RatingService:
                 props["batch_id"] = str(batch_id)
             if feed_tier is not None:
                 props["feed_tier"] = feed_tier
-            await self._analytics.track("event_skipped", user_id, **props)
+            self._analytics.track_background("event_skipped", user_id, **props)
 
     async def _recalculate_event_scores(self, event_id: UUID, conn: asyncpg.Connection) -> None:
         row = await conn.fetchrow(
