@@ -1,10 +1,11 @@
+import logging
 import time
 from typing import Any, Awaitable, Callable
 
 from aiogram import BaseMiddleware
-from aiogram.types import CallbackQuery, Message, TelegramObject, Update, User as TgUser
+from aiogram.types import CallbackQuery, ErrorEvent, Message, TelegramObject, Update, User as TgUser
 
-from app.i18n import resolve_lang
+from app.i18n import resolve_lang, t
 from app.schemas.users import User
 from app.services.analytics_service import AnalyticsService
 from app.services.user_service import UserService
@@ -28,6 +29,7 @@ def _extract_tg_user(event: TelegramObject) -> TgUser | None:
 
 
 _USER_CACHE_TTL_SEC = 45.0
+logger = logging.getLogger(__name__)
 
 
 class ServicesMiddleware(BaseMiddleware):
@@ -84,3 +86,26 @@ class UserContextMiddleware(BaseMiddleware):
                     )
 
         return await handler(event, data)
+
+
+async def on_dispatcher_error(event: ErrorEvent) -> bool:
+    logger.exception("Unhandled bot error: %s", event.exception)
+    update = event.update
+    lang = "ru"
+    if update.callback_query and update.callback_query.from_user:
+        lang = resolve_lang(update.callback_query.from_user.language_code)
+    elif update.message and update.message.from_user:
+        lang = resolve_lang(update.message.from_user.language_code)
+
+    try:
+        if update.callback_query:
+            if update.callback_query.message:
+                await update.callback_query.answer()
+                await update.callback_query.message.answer(t("error_generic", lang))
+            else:
+                await update.callback_query.answer()
+        elif update.message:
+            await update.message.answer(t("error_generic", lang))
+    except Exception:
+        logger.exception("Failed to notify user about bot error")
+    return True

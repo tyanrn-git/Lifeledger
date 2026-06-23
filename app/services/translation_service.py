@@ -10,6 +10,9 @@ from app.utils.language import lang_prefix, languages_match
 
 logger = logging.getLogger(__name__)
 
+_MAX_CONCURRENT_TRANSLATIONS = 2
+_translation_sem = asyncio.Semaphore(_MAX_CONCURRENT_TRANSLATIONS)
+
 
 class TranslationService:
     def __init__(
@@ -46,9 +49,13 @@ class TranslationService:
         if cached:
             return cached
 
-        translated = await self._ai.translate_event(
-            normalized_text, lang_prefix(source_language), target
-        )
+        async with _translation_sem:
+            cached = await self._translations.get(event_id, target)
+            if cached:
+                return cached
+            translated = await self._ai.translate_event(
+                normalized_text, lang_prefix(source_language), target
+            )
         await self._translations.save(event_id, target, translated)
         return translated
 

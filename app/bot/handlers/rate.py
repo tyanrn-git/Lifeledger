@@ -2,6 +2,7 @@ import asyncio
 import logging
 from uuid import UUID
 
+import asyncpg
 from aiogram import F, Router
 from aiogram.types import CallbackQuery, Message
 
@@ -53,10 +54,10 @@ def _schedule_batch_translation_prefetch(
 ) -> None:
     async def _run() -> None:
         try:
-            event_ids = await impressions_repo.list_shown_event_ids(
-                user_id, batch_id, offset=0, limit=settings.batch_size
+            upcoming = await impressions_repo.list_shown_event_ids(
+                user_id, batch_id, offset=0, limit=3
             )
-            for event_id in event_ids:
+            for event_id in upcoming:
                 if event_id != skip_event_id:
                     translation_service.prefetch_display_text(event_id, content_lang)
         except Exception:
@@ -99,7 +100,6 @@ async def send_feed(
         content_lang,
         skip_event_id=feed.event.id,
     )
-    feed_service.schedule_pool_refill(user_id)
 
 
 async def send_next_event(
@@ -170,7 +170,17 @@ async def on_rate(
     await callback.answer()
 
     try:
-        event, batch_id = await rating_service.rate_event(user_id, event_id, score)
+        event, batch_id = await asyncio.wait_for(
+            rating_service.rate_event(user_id, event_id, score),
+            timeout=25,
+        )
+    except asyncio.TimeoutError:
+        logger.error("Timed out rating event %s for user %s", event_id, user_id)
+        await callback.message.answer(t("error_generic", lang))
+        return
+    except asyncpg.UniqueViolationError:
+        await callback.message.answer(t("already_rated", lang))
+        return
     except PermissionError:
         await callback.message.answer(t("own_event", lang))
         return
@@ -200,6 +210,7 @@ async def on_rate(
             user_id,
             batch_id,
             content_lang,
+            skip_event_id=event_id,
         )
 
 
