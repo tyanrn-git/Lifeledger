@@ -46,7 +46,7 @@ async def test_fetch_or_generate_blocks_only_when_pool_empty():
     result = await feed_service._fetch_or_generate(USER_ID)
 
     assert len(result) == 1
-    ai_generation.ensure_pool_for_user.assert_awaited_once_with(USER_ID)
+    ai_generation.ensure_pool_for_user.assert_awaited_once_with(USER_ID, minimum=1)
     ai_generation.schedule_pool_refill.assert_not_called()
 
 
@@ -71,6 +71,27 @@ async def test_fetch_or_generate_schedules_background_refill_when_partial():
     assert len(result) == 1
     ai_generation.ensure_pool_for_user.assert_not_awaited()
     ai_generation.schedule_pool_refill.assert_called_once_with(USER_ID)
+
+
+@pytest.mark.asyncio
+async def test_start_or_resume_force_new_completes_active_batch():
+    batches = MagicMock()
+    batches.get_active_batch = AsyncMock(return_value=uuid4())
+    batches.complete_batch = AsyncMock()
+
+    events_repo = MagicMock()
+    events_repo.fetch_available_candidates = AsyncMock(return_value=[])
+
+    feed_service = FeedService(
+        events_repo,
+        MagicMock(),
+        batches,
+        MagicMock(),
+    )
+
+    await feed_service.start_or_resume(USER_ID, force_new=True)
+
+    batches.complete_batch.assert_awaited_once()
 
 
 def test_schedule_pool_refill_deduplicates_inflight_tasks(monkeypatch):

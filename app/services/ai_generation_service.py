@@ -48,10 +48,18 @@ class AIGenerationService:
         finally:
             self._refill_tasks.pop(user_id, None)
 
-    async def ensure_pool_for_user(self, user_id, target: int | None = None) -> int:
+    async def ensure_pool_for_user(
+        self,
+        user_id,
+        target: int | None = None,
+        *,
+        minimum: int | None = None,
+    ) -> int:
         need = target or settings.batch_size
-        min_available = settings.ai_generation_min_available
-        threshold = max(min_available, need)
+        if minimum is not None:
+            threshold = minimum
+        else:
+            threshold = max(settings.ai_generation_min_available, need)
         created_total = 0
 
         for _ in range(3):

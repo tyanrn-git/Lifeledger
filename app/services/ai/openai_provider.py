@@ -2,8 +2,9 @@ import json
 import logging
 
 from openai import AsyncOpenAI
+from pydantic import ValidationError
 
-from app.schemas.ai import EventAnalysis, EventRescore, GeneratedEventsBatch
+from app.schemas.ai import EventAnalysis, EventRescore, GeneratedEventDraft, GeneratedEventsBatch
 from app.services.ai.base import AIProvider
 from app.services.ai.prompts import (
     ANALYZE_SYSTEM,
@@ -84,7 +85,13 @@ class OpenAIProvider(AIProvider):
         )
         raw = response.choices[0].message.content or '{"events":[]}'
         data = json.loads(raw)
-        return GeneratedEventsBatch.model_validate(data)
+        events: list[GeneratedEventDraft] = []
+        for item in data.get("events", []):
+            try:
+                events.append(GeneratedEventDraft.model_validate(item))
+            except ValidationError:
+                logger.warning("Skipping invalid generated event draft: %s", item)
+        return GeneratedEventsBatch(events=events)
 
     async def rescore_event(
         self,

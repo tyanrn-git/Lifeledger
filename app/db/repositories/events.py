@@ -159,6 +159,7 @@ class EventsRepository:
             select count(*)::int
             from events e
             where e.is_deleted = false
+              and e.is_feed_hidden = false
               and (e.author_user_id is null or e.author_user_id <> $1)
               and not exists (
                 select 1 from event_impressions ei

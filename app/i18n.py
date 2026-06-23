@@ -32,6 +32,10 @@ MESSAGES: dict[str, dict[str, str]] = {
         "ru": "Для вас подготовлено {count} событий.",
         "en": "{count} events are ready for you.",
     },
+    "feed_loading": {
+        "ru": "Подбираем события, подождите…",
+        "en": "Preparing events, please wait…",
+    },
     "no_events": {
         "ru": (
             "Пока нет новых событий для оценки.\n\n"

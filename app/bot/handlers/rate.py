@@ -291,15 +291,24 @@ async def on_new_batch(
         return
 
     await callback.answer()
-
-    await send_feed(
-        callback.message,
-        user_id,
-        lang,
-        content_lang,
-        feed_service,
-        translation_service,
-        impressions_repo,
-        show_batch_intro=True,
-        force_new=True,
-    )
+    loading = await callback.message.answer(t("feed_loading", lang))
+    try:
+        await send_feed(
+            callback.message,
+            user_id,
+            lang,
+            content_lang,
+            feed_service,
+            translation_service,
+            impressions_repo,
+            show_batch_intro=True,
+            force_new=True,
+        )
+    except Exception:
+        logger.exception("Failed to start new feed batch for user %s", user_id)
+        await callback.message.answer(t("error_generic", lang))
+    finally:
+        try:
+            await loading.delete()
+        except Exception:
+            pass

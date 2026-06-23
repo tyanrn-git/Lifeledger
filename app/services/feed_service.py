@@ -76,6 +76,11 @@ class FeedService:
         self._analytics.track_many_background(rows)
 
     async def start_or_resume(self, user_id: UUID, *, force_new: bool = False) -> FeedStart:
+        if force_new:
+            active_id = await self._batches.get_active_batch(user_id)
+            if active_id:
+                await self._batches.complete_batch(active_id)
+
         batch_id = None if force_new else await self._batches.get_active_batch(user_id)
         is_new_batch = False
 
@@ -236,7 +241,7 @@ class FeedService:
             return candidates
 
         if len(candidates) == 0:
-            await self._ai_generation.ensure_pool_for_user(user_id)
+            await self._ai_generation.ensure_pool_for_user(user_id, minimum=1)
             return await self._events.fetch_available_candidates(
                 user_id,
                 settings.batch_size,
