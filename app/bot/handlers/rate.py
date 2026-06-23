@@ -292,6 +292,7 @@ async def on_new_batch(
 
     await callback.answer()
     loading = await callback.message.answer(t("feed_loading", lang))
+    feed_service.cancel_pool_refill(user_id)
     try:
         await send_feed(
             callback.message,

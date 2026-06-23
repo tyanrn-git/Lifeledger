@@ -32,6 +32,11 @@ class AIGenerationService:
         self._analytics = analytics_service
         self._refill_tasks: dict[UUID, asyncio.Task] = {}
 
+    def cancel_pool_refill(self, user_id: UUID) -> None:
+        task = self._refill_tasks.pop(user_id, None)
+        if task and not task.done():
+            task.cancel()
+
     def schedule_pool_refill(self, user_id: UUID) -> None:
         task = self._refill_tasks.get(user_id)
         if task and not task.done():
@@ -43,6 +48,8 @@ class AIGenerationService:
     async def _run_pool_refill(self, user_id: UUID) -> None:
         try:
             await self.ensure_pool_for_user(user_id)
+        except asyncio.CancelledError:
+            raise
         except Exception:
             logger.exception("Background AI pool refill failed for user %s", user_id)
         finally:
@@ -106,48 +113,47 @@ class AIGenerationService:
         return created_total
 
     async def _generate_locked_batch(self, user_id) -> tuple[int, object]:
+        avoid = await self._events.list_avoid_texts_for_user(user_id, limit=40)
+        async with self._pool.acquire() as conn:
+            global_avoid = await conn.fetch(
+                """
+                select normalized_text
+                from events
+                where source = 'ai_generated'::event_source
+                  and is_deleted = false
+                order by created_at desc
+                limit 30
+                """
+            )
+        for row in global_avoid:
+            text = row["normalized_text"]
+            if text and text not in avoid:
+                avoid.append(text)
+
+        batch = await self._ai.generate_event_batch(
+            avoid,
+            settings.ai_generation_batch_size,
+        )
+        if not batch.events:
+            logger.warning("AI returned empty event batch")
+            return 0, None
+
+        batch_id = uuid4()
         async with self._pool.acquire() as conn:
             async with conn.transaction():
                 await conn.execute(
                     "select pg_advisory_xact_lock($1)",
                     _GENERATION_LOCK_KEY,
                 )
-                avoid = await self._events.list_avoid_texts_for_user(
-                    user_id, limit=40
-                )
-                global_avoid = await conn.fetch(
-                    """
-                    select normalized_text
-                    from events
-                    where source = 'ai_generated'::event_source
-                      and is_deleted = false
-                    order by created_at desc
-                    limit 30
-                    """
-                )
-                for row in global_avoid:
-                    text = row["normalized_text"]
-                    if text and text not in avoid:
-                        avoid.append(text)
-
-                batch = await self._ai.generate_event_batch(
-                    avoid,
-                    settings.ai_generation_batch_size,
-                )
-                if not batch.events:
-                    logger.warning("AI returned empty event batch")
-                    return 0, None
-
-                batch_id = uuid4()
                 created_ids = await self._events.create_ai_generated_batch(
                     batch.events,
                     batch_id,
                     conn=conn,
                 )
-                logger.info(
-                    "AI generated %s events in batch %s for user %s",
-                    len(created_ids),
-                    batch_id,
-                    user_id,
-                )
-                return len(created_ids), batch_id
+        logger.info(
+            "AI generated %s events in batch %s for user %s",
+            len(created_ids),
+            batch_id,
+            user_id,
+        )
+        return len(created_ids), batch_id

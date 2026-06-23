@@ -231,6 +231,10 @@ class FeedService:
         if self._ai_generation:
             self._ai_generation.schedule_pool_refill(user_id)
 
+    def cancel_pool_refill(self, user_id: UUID) -> None:
+        if self._ai_generation:
+            self._ai_generation.cancel_pool_refill(user_id)
+
     async def _fetch_or_generate(self, user_id: UUID) -> list[FeedEventCandidate]:
         candidates = await self._events.fetch_available_candidates(
             user_id,
